@@ -1,0 +1,22 @@
+# Production
+# Build Stage
+FROM rust:slim-buster AS builder
+
+WORKDIR /prod
+COPY Cargo.lock .
+COPY Cargo.toml .
+RUN mkdir .cargo
+RUN cargo vendor > .cargo/config
+
+COPY . .
+RUN apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev
+RUN cargo build --release
+
+# Runtime Stage
+FROM fedora:34 AS runner
+
+RUN dnf install -y libpq
+
+EXPOSE 8080
+COPY --from=builder /prod/target/release/app /bin/app
+ENTRYPOINT ["/bin/app"]
