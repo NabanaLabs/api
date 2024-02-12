@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for nabana-labs-api-blue-night-4913-purple-fog-5373 on 2024-02-11T21:27:24-05:00
+# fly.toml app configuration file generated for nabana-labs-api-blue-night-4913-purple-fog-5373-misty-darkness-3133 on 2024-02-12T05:22:02-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'nabana-labs-api-blue-night-4913-purple-fog-5373'
+app = 'nabana-labs-api'
 primary_region = 'bog'
 
 [experimental]
