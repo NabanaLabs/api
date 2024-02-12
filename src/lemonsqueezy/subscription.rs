@@ -5,13 +5,9 @@ use mongodb::bson::{doc, to_bson, Bson};
 use serde_json::json;
 
 use crate::{
-    utilities::helpers::{random_string, add_subscription_history_log_and_to_bson},
-    server::AppState,
-    types::{
-        customer::GenericResponse,
-        lemonsqueezy::SubscriptionEvent,
-        subscription::{Slug, Subscription, SubscriptionFrequencyClass, SubscriptionHistoryLog},
-    }, storage::mongo::{build_customer_filter, find_customer, update_customer},
+    storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{
+        customer::GenericResponse, lemonsqueezy::SubscriptionEvent, state::AppState, subscription::{Slug, Subscription, SubscriptionFrequencyClass, SubscriptionHistoryLog}
+    }, utilities::helpers::{add_subscription_history_log_and_to_bson, random_string}
 };
 
 pub async fn subscription_created(

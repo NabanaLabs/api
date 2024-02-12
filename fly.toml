@@ -23,6 +23,8 @@ primary_region = "bog"
   BREVO_MASTER_NAME="Nabana Labs [DEV MODE]"
   GOOGLE_OAUTH_CLIENT_ID="36457200694-c4rudq1jf1ne13mhr99oidskaf3rcsli.apps.googleusercontent.com"
   GOOGLE_OAUTH_CLIENT_REDIRECT_ENDPOINT="/api/identity/session/google"
+  PROMPT_CLASSIFICATION_MODEL_NAME="jane"
+  PROMPT_CLASSIFICATION_MODEL_URL="https://huggingface.co/jeanvydes/jane"
 
 [http_service]
   internal_port = 8080

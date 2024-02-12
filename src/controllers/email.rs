@@ -6,7 +6,7 @@ use mongodb::bson::doc;
 use redis::{Commands, RedisError};
 use serde_json::json;
 
-use crate::{email::brevo_api::send_verification_email, server::AppState, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}}, utilities::{api_messages::{APIMessages, CustomerMessages, EmailMessages, RedisMessages, TokenMessages}, helpers::{payload_analyzer, random_string, valid_email}}};
+use crate::{email::brevo_api::send_verification_email, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}, state::AppState}, utilities::{api_messages::{APIMessages, CustomerMessages, EmailMessages, RedisMessages, TokenMessages}, helpers::{payload_analyzer, random_string, valid_email}}};
 
 use super::identity::{get_user_session_from_req, SessionScopes};
 

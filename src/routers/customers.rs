@@ -3,8 +3,8 @@ use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
 use axum::{Router, routing::post};
 use crate::controllers::customer::create_customer_record;
+use crate::types::state::AppState;
 
-use crate::server::AppState;
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};

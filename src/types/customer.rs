@@ -3,6 +3,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
 
+use super::organization::OrganizationID;
+
+pub type CustomerID = String;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GenericResponse {
     pub message: String,
@@ -77,7 +81,7 @@ impl FromStr for AuthProviders {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Customer {
-    pub id: String,
+    pub id: CustomerID,
     pub name: String,
     pub class: CustomerType,
     pub emails: Vec<Email>,
@@ -91,14 +95,18 @@ pub struct Customer {
     pub preferences: Preferences,
     pub subscription: Subscription,
 
+    // account state
     pub created_at: String,
     pub updated_at: String,
     pub deleted: bool,
+
+    // org
+    pub related_orgs: Vec<OrganizationID>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PublicCustomer {
-    pub id: String,
+    pub id: CustomerID,
     pub name: String,
     pub class: CustomerType,
     
@@ -112,7 +120,7 @@ pub struct PublicCustomer {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PrivateSensitiveCustomer {
-    pub id: Option<String>,
+    pub id: Option<CustomerID>,
     pub name: Option<String>,
     pub class: Option<CustomerType>,
     pub emails: Option<Vec<Email>>,

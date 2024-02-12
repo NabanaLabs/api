@@ -23,7 +23,19 @@ pub enum APIMessages{
     Redis(RedisMessages),
     // Customer
     Customer(CustomerMessages),
+    LLMRouter(LLMRouterMessages),
 }
+
+#[derive(Debug)]
+pub enum LLMRouterMessages {
+    PromptProcessed,
+    ErrorProcessingPrompt,
+    RouterNotFound,
+    RequiredRouterIDField,
+    RequiredPromptField,
+    RequiredCacheField,
+}
+
 
 #[derive(Debug)]
 pub enum TokenMessages {
@@ -127,6 +139,20 @@ impl ToString for APIMessages {
             APIMessages::Mongo(mongo_message) => mongo_message.to_string(),
             APIMessages::Redis(redis_message) => redis_message.to_string(),
             APIMessages::Customer(customer_message) => customer_message.to_string(),
+            APIMessages::LLMRouter(llm_router_message) => llm_router_message.to_string(),
+        }
+    }
+}
+
+impl ToString for LLMRouterMessages {
+    fn to_string(&self) -> String {
+        match self {
+            LLMRouterMessages::PromptProcessed => "llm_router.prompt_processed".to_string(),
+            LLMRouterMessages::ErrorProcessingPrompt => "llm_router.error_processing_prompt".to_string(),
+            LLMRouterMessages::RouterNotFound => "llm_router.router_not_found".to_string(),
+            LLMRouterMessages::RequiredRouterIDField => "llm_router.required_router_id_field".to_string(),
+            LLMRouterMessages::RequiredPromptField => "llm_router.required_prompt_field".to_string(),
+            LLMRouterMessages::RequiredCacheField => "llm_router.required_cache_field".to_string(),
         }
     }
 }

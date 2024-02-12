@@ -5,8 +5,8 @@ use axum::http::{StatusCode, HeaderMap};
 use axum::{Router, routing::post};
 
 use crate::lemonsqueezy::webhook::{orders_webhook_events_listener, subscription_webhook_events_listener};
-use crate::server::AppState;
 use crate::types::lemonsqueezy::{SubscriptionEvent, OrderEvent};
+use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};

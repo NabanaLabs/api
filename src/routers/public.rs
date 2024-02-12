@@ -5,8 +5,8 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::{Router, routing::get};
 use crate::controllers::customer::fetch_customer_record_by_id;
 
-use crate::server::AppState;
 use crate::types::incoming_requests::FetchCustomerByID;
+use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};

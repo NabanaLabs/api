@@ -5,8 +5,8 @@ use axum::http::{StatusCode, HeaderMap};
 use axum::{Router, routing::{get, patch}};
 use crate::controllers::customer::{update_name, update_password};
 use crate::controllers::email::{add_email, verify_email};
-use crate::server::AppState;
 use crate::types::incoming_requests::{CustomerUpdateName, CustomerUpdatePassword, CustomerAddEmail};
+use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};

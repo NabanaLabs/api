@@ -2,7 +2,7 @@ use reqwest::{Client, Url};
 use serde::Deserialize;
 use std::{error::Error, sync::Arc};
 
-use crate::server::AppState;
+use crate::types::state::AppState;
 
 #[derive(Deserialize)]
 pub struct OAuthResponse {

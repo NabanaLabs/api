@@ -6,7 +6,7 @@ use serde_json::json;
 
 use std::env;
 
-use crate::types::customer::{GenericResponse, Customer};
+use crate::types::{customer::{Customer, GenericResponse}, organization::Organization};
 
 pub async fn init_connection() -> mongodb::error::Result<Client> {
     let uri = match env::var("MONGO_URI") {
@@ -44,8 +44,20 @@ pub async fn build_customer_filter(id: &str, email: &str) -> Document {
     return customer_filter
 }
 
+pub async fn build_organizations_filter(id: &str) -> Document {
+    let customer_filter = doc! {"$or": [
+        {"id": id},
+    ]};
+
+    return customer_filter
+}
+
 pub async fn get_customers_collection(db: &Database) -> Collection<Customer> {
     return db.collection("customers");
+}
+
+pub async fn get_organizations_collection(db: &Database) -> Collection<Organization> {
+    return db.collection("organizations");
 }
 
 pub async fn find_customer(db: &Database, filter: Document) -> Result<(bool, Option<Customer>), (StatusCode, Json<GenericResponse>)> {
@@ -60,6 +72,26 @@ pub async fn find_customer(db: &Database, filter: Document) -> Result<(bool, Opt
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GenericResponse {
                     message: String::from("error fetching customer"),
+                    data: json!({}),
+                    exit_code: 1,
+                }),
+            ));
+        },
+    }
+}
+
+pub async fn find_organization(db: &Database, filter: Document) -> Result<(bool, Option<Organization>), (StatusCode, Json<GenericResponse>)> {
+    let collection = get_organizations_collection(db).await;
+    match collection.find_one(filter, None).await {
+        Ok(org) => match org {
+            Some(org) => Ok((true, Some(org))),
+            None => Ok((false, None)),
+        },
+        Err(_) => {
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(GenericResponse {
+                    message: String::from("error fetching organzation"),
                     data: json!({}),
                     exit_code: 1,
                 }),

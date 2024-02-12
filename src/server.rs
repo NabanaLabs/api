@@ -1,9 +1,7 @@
 use crate::{
-    utilities::helpers::fallback,
-    types::lemonsqueezy::Products, 
     routers::{
-        customer_actions::get_customer_actions_router, customers::get_customers_router, identity::get_identity_router, public::get_public_router, webhooks::get_webhooks_router
-    },
+        customer_actions::get_customer_actions_router, customers::get_customers_router, identity::get_identity_router, llm_routers::get_llm_routers_router, public::get_public_router, webhooks::get_webhooks_router
+    }, types::{lemonsqueezy::Products, state::{AppState, EmailProviderSettings, GoogleAuth, MasterEmailEntity}}, utilities::helpers::fallback
 };
 use axum::{
     http::Method,
@@ -11,10 +9,11 @@ use axum::{
     Router,
 };
 use diesel::{r2d2::ConnectionManager, PgConnection};
-use mongodb::{Client as MongoClient, Database};
+use mongodb::Client as MongoClient;
 use r2d2::Pool;
 use redis::Client as RedisClient;
-use std::{env, sync::Arc, time::Duration};
+use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType}, sequence_classification::{SequenceClassificationConfig, SequenceClassificationModel}}, resources::RemoteResource, RustBertError};
+use std::{env, sync::{Arc, Mutex}, time::Duration};
 
 use tower_http::timeout::TimeoutLayer;
 use tower_http::{
@@ -23,46 +22,6 @@ use tower_http::{
 };
 
 use log::info;
-
-#[derive(Clone)]
-pub struct MasterEmailEntity {
-    pub email: String,
-    pub name: String,
-}
-
-#[derive(Clone)]
-pub struct EmailProviderSettings {
-    pub email_verification_template_id: u32,
-}
-
-#[derive(Clone)]
-pub struct GoogleAuth {
-    pub client_id: String,
-    pub client_secret: String,
-    pub redirect_url: String,
-}
-
-
-#[derive(Clone)]
-pub struct AppState {
-    pub api_url: String,
-    pub api_tokens_expiration_time: i64,
-
-    pub mongodb_client: MongoClient,
-    pub mongo_db: Database,
-
-    pub redis_connection: RedisClient,
-    pub postgres_conn: Option<Pool<ConnectionManager<PgConnection>>>,
-
-    pub lemonsqueezy_webhook_signature_key: String,
-    pub products: Products,
-
-    pub enabled_email_integration: bool,
-    pub master_email_entity: MasterEmailEntity,
-    pub email_provider_settings: EmailProviderSettings,
-
-    pub google_auth: GoogleAuth,
-}
 
 pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, postgres_conn: Option<Pool<ConnectionManager<PgConnection>>>) {
     let app_state = set_app_state(mongodb_client, redis_connection, postgres_conn).await;
@@ -84,13 +43,17 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
     // /api/webhooks
     let webhooks = get_webhooks_router(app_state.clone()).await;
     info!("Webhooks router loaded");
+    // /api/llm/routers
+    let llmrouters = get_llm_routers_router(app_state.clone()).await;
+    info!("LLM Routers router loaded");
     // /api
     let api = Router::new()
         .nest("/public", public)
         .nest("/customers", customers)
         .nest("/me", customers_actions)
         .nest("/identity", identity)
-        .nest("/webhooks", webhooks);
+        .nest("/webhooks", webhooks)
+        .nest("/llm/routers", llmrouters);
 
     info!("API router loaded");
 
@@ -227,6 +190,38 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
         redirect_url: google_oauth_redirect_url,
     };
 
+    let prompt_classification_model_name = match env::var("PROMPT_CLASSIFICATION_MODEL_NAME") {
+        Ok(name) => name,
+        Err(_) => panic!("PROMPT_CLASSIFICATION_MODEL_NAME not found"),
+    };
+
+    let prompt_classification_model_url = match env::var("PROMPT_CLASSIFICATION_MODEL_URL") {
+        Ok(url) => url,
+        Err(_) => panic!("PROMPT_CLASSIFICATION_MODEL_URL not found"),
+    };
+
+    let prompt_classification_model = match create_prompt_classify_model(&prompt_classification_model_name, &prompt_classification_model_url).await {
+        Ok(model) => model,
+        Err(e) => panic!("Error creating prompt classification model: {}", e),
+    };
+
+    let safe_prompt_classification_model = Arc::new(Box::new(Mutex::new(prompt_classification_model)));
+
+    let embedding_model = match SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model() {
+        Ok(model) => model,
+        Err(e) => panic!("Error creating sentence embeddings model: {}", e),
+    };
+
+    let safe_embedding_model = Arc::new(Box::new(Mutex::new(embedding_model)));
+
+    let llm_resources = crate::types::state::LLMResources {
+        prompt_classification_model: crate::types::state::PromptClassificationModel {
+            model: safe_prompt_classification_model,
+            name: prompt_classification_model_name,
+            url: prompt_classification_model_url,
+        },
+        embedding_model: safe_embedding_model,
+    };
     let app_state = Arc::new(AppState {
         mongodb_client,
         redis_connection,
@@ -240,7 +235,36 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
         master_email_entity,
         email_provider_settings,
         google_auth,
+        llm_resources,
     });
 
     return app_state;
+}
+
+pub async fn create_prompt_classify_model(name: &String, url: &String) -> Result<SequenceClassificationModel, RustBertError> {
+    info!("Loading Prompt Classification Model: {} from: {}", name, url);                 
+    let config_resource = Box::new(RemoteResource::from_pretrained((
+        name,
+        &format!("{}/resolve/main/config.json", url).to_string()
+    )));
+
+    let vocab_resource = Box::new(RemoteResource::from_pretrained((
+        name,
+        &format!("{}/resolve/main/vocab.json", url).to_string()
+    )));
+    
+    let model_resource = ModelResource::Torch(Box::new(RemoteResource::from_pretrained((
+        name,
+        &format!("{}/resolve/main/rust_model.ot", url).to_string()
+    ))));
+
+    let config = SequenceClassificationConfig {
+        model_type: ModelType::Bert,
+        model_resource,
+        config_resource,
+        vocab_resource,
+        ..Default::default()
+    };
+
+    return SequenceClassificationModel::new(config);
 }

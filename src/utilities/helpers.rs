@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::types::{customer::{GenericResponse, CustomerType}, subscription::SubscriptionHistoryLog};
 use axum::{
     extract::rejection::JsonRejection,
@@ -8,6 +10,7 @@ use mongodb::bson::{to_document, Document};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use regex::Regex;
+use rust_bert::{pipelines::sentence_embeddings::SentenceEmbeddingsModel, RustBertError};
 use serde_json::json;
 
 use super::api_messages::{APIMessages, CustomerMessages, EmailMessages, InputMessages};
@@ -140,4 +143,36 @@ pub async fn add_subscription_history_log_and_to_bson(mut history_logs: Vec<Subs
     .collect();
 
     return bson_history_logs;
+}
+
+// LLM
+
+pub fn calculate_cosine_similarity(embedding1: Vec<f32>, embedding2: Vec<f32>) -> f32 {
+    let dot_product = embedding1.iter().zip(embedding2.iter()).map(|(a, b)| a * b).sum::<f32>();
+    let norm1 = embedding1.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+    let norm2 = embedding2.iter().map(|x| x.powi(2)).sum::<f32>().sqrt();
+
+    dot_product / (norm1 * norm2)
+}
+
+pub async fn detect_similar_sentences(model: &Arc<Box<Mutex<SentenceEmbeddingsModel>>>, sentence_one: String, sentence_two: String, temperature: f32) -> Result<(bool, f32), RustBertError> {
+    let model = model.lock().unwrap();
+    let sentences = [sentence_one, sentence_two];
+    let embeddings = model.encode(&sentences)?;
+    drop(model);
+    // Calculate cosine similarity
+    let similarity = calculate_cosine_similarity(embeddings[0].clone(), embeddings[1].clone());
+    if similarity.is_nan() {
+        return Ok((false, similarity));
+    }
+
+    if similarity.is_infinite() {
+        return Ok((false, similarity));
+    }
+
+    if similarity < temperature {
+        return Ok((false, similarity));
+    }
+
+    return Ok((true, similarity));
 }

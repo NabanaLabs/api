@@ -43,3 +43,11 @@ pub struct FetchCustomerByID {
 pub struct VerifyEmailQueryParams {
     pub token: Option<String>,
 }
+
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessPrompt {
+    pub organization_id: Option<String>,
+    pub router_id: Option<String>,
+    pub prompt: Option<String>,
+}

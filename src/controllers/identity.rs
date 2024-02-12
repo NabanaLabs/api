@@ -1,7 +1,7 @@
 use crate::oauth::google::{get_google_user, request_token};
+use crate::types::state::AppState;
 use crate::utilities::api_messages::{APIMessages, CustomerMessages, EmailMessages, RedisMessages, TokenMessages};
 use crate::utilities::helpers::payload_analyzer;
-use crate::server::AppState;
 use crate::storage::mongo::{build_customer_filter, find_customer};
 use crate::utilities::token::{create_token, extract_token_from_headers, get_session_from_redis, get_token_payload, string_to_scopes, validate_token};
 use crate::types::customer::{AuthProviders, GenericResponse};

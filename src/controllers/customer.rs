@@ -6,6 +6,7 @@ use crate::types::customer::{
 use crate::types::incoming_requests::{
     CreateCustomerRecord, CustomerUpdateName, CustomerUpdatePassword, FetchCustomerByID
 };
+use crate::types::state::AppState;
 use crate::types::subscription::{Slug, Subscription, SubscriptionFrequencyClass};
 use crate::utilities::api_messages::{
     APIMessages, CustomerMessages, EmailMessages, InputMessages, MongoMessages,
@@ -14,7 +15,7 @@ use crate::utilities::api_messages::{
 use crate::utilities::helpers::{
     parse_class, payload_analyzer, random_string, valid_email, valid_password,
 };
-use crate::{server::AppState, types::customer::GenericResponse};
+use crate::types::customer::GenericResponse;
 
 use axum::extract::Query;
 use axum::http::HeaderMap;
@@ -167,7 +168,7 @@ pub async fn create_customer_record(
         history_logs: vec![],
     };
 
-    let id = random_string(30).await;
+    let id = random_string(32).await;
     let customer = Customer {
         id,
         name: payload.name.clone(),
@@ -188,6 +189,7 @@ pub async fn create_customer_record(
         created_at: iso8601_string.clone(),
         updated_at: iso8601_string.clone(),
         deleted: false,
+        related_orgs: vec![],
     };
 
     let created_customer_list = std::env::var("BREVO_CUSTOMERS_LIST_ID");

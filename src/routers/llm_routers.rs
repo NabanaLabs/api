@@ -1,43 +1,39 @@
 use axum::BoxError;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
-use axum::{Router, routing::{get, post, patch}};
-use crate::controllers::identity::{get_session, gooogle_authentication, legacy_authentication, renew_session};
+use axum::{Router, routing::{get, post}};
+use crate::controllers::llm_routers::process_prompt;
 use crate::types::state::AppState;
-
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};
 
-// /api/identity
-pub async fn get_identity_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+// /api/llm/routers
+pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     return Router::new()
         .route(
-            "/session/legacy",
+            // suggest and model and cache it
+            // if cache is not empty, return the cached response
+            "/prompt",
             post({
                 let app_state = Arc::clone(&app_state);
-                move |payload| legacy_authentication(payload, app_state)
+                move |payload| process_prompt(payload, app_state)
             }),
         )
         .route(
-            "/session/legacy",
+            // check if prompt is in cache
+            "/prompt/cache",
             get({
                 let app_state = Arc::clone(&app_state);
-                move |headers| get_session(headers, app_state)
+                move |payload| process_prompt(payload, app_state)
             }),
         )
         .route(
-            "/session/legacy",
-            patch({
+            // add prompt-response to cache
+            "/prompt/cache",
+            post({
                 let app_state = Arc::clone(&app_state);
-                move |headers| renew_session(headers, app_state)
-            }),
-        )
-        .route(
-            "/session/google",
-            get({
-                let app_state = Arc::clone(&app_state);
-                move |headers| gooogle_authentication(headers, app_state)
+                move |payload| process_prompt(payload, app_state)
             }),
         )
         .layer(
