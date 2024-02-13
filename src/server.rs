@@ -254,6 +254,11 @@ pub async fn zero_shot_create_prompt_classify_model(name: &String, url: &String)
         name,
         &format!("{}/resolve/main/vocab.json", url).to_string()
     )));
+
+    let merges_resource = Box::new(RemoteResource::from_pretrained((
+        name,
+        &format!("{}/resolve/main/merges.txt", url).to_string()
+    )));
     
     let model_resource = ModelResource::Torch(Box::new(RemoteResource::from_pretrained((
         name,
@@ -265,6 +270,7 @@ pub async fn zero_shot_create_prompt_classify_model(name: &String, url: &String)
         model_resource,
         config_resource,
         vocab_resource,
+        merges_resource: Some(merges_resource),
         ..Default::default()
     };
 
