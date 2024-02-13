@@ -5,7 +5,7 @@ use r2d2::Pool;
 
 use mongodb::{Client as MongoClient, Database};
 use redis::Client as RedisClient;
-use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::SentenceEmbeddingsModel, sequence_classification::SequenceClassificationModel}, resources::RemoteResource};
+use rust_bert::pipelines::{sentence_embeddings::SentenceEmbeddingsModel, zero_shot_classification::ZeroShotClassificationModel};
 
 use super::lemonsqueezy::Products;
 
@@ -28,19 +28,8 @@ pub struct GoogleAuth {
 }
 
 #[derive(Clone)]
-pub enum CustomSentenceEmbeddingsModelType {
-    DistiluseBaseMultilingualCased,
-    BertBaseNliMeanTokens,
-    AllMiniLmL12V2,
-    AllMiniLmL6V2,
-    AllDistilrobertaV1,
-    ParaphraseAlbertSmallV2,
-    SentenceT5Base,
-}
-
-#[derive(Clone)]
 pub struct PromptClassificationModel {
-    pub model: Arc<Box<Mutex<SequenceClassificationModel>>>,
+    pub model: Arc<Box<Mutex<ZeroShotClassificationModel>>>,
     pub name: String,
     pub url: String,
 }

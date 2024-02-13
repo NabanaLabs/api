@@ -8,7 +8,7 @@ API_URL=                                # Not Sensitive Data (fly.toml)
 POSTGRES_URI=                           # (optional) fly secrets set POSTGRES_URI=
 MONGO_URI=                              # fly secrets set MONGO_URI=
 REDIS_URI=                              # fly secrets set REDIS_URI=
-MONGO_DB_NAME=                          #  Not Sensitive Data (fly.toml)
+MONGO_DB_NAME=                          # Not Sensitive Data (fly.toml)
 
 API_TOKENS_SIGNING_KEY=                 # fly secrets set API_TOKENS_SIGNING_KEY=
 API_TOKENS_EXPIRATION_TIME=

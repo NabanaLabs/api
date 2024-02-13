@@ -1,11 +1,12 @@
 use std::sync::{Arc, MutexGuard};
 
 use axum::{extract::rejection::JsonRejection, http::StatusCode, Json};
-use rust_bert::pipelines::sequence_classification::SequenceClassificationModel;
+use log::debug;
+use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{storage::mongo::{build_organizations_filter, find_organization}, types::{customer::GenericResponse, incoming_requests::ProcessPrompt, organization::ModelObject, state::AppState}, utilities::{api_messages::{APIMessages, LLMRouterMessages}, helpers::{detect_similar_sentences, payload_analyzer}}};
+use crate::{storage::mongo::{build_organizations_filter, find_organization}, types::{customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category, organization::ModelObject, state::AppState}, utilities::{api_messages::{APIMessages, LLMRouterMessages}, helpers::{detect_similar_sentences, payload_analyzer}}};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProccesedPrompt {
@@ -194,13 +195,49 @@ pub async fn process_prompt(
     }
 
     if router.use_prompt_calification_model {
-        let model: MutexGuard<'_, SequenceClassificationModel> = state.llm_resources.prompt_classification_model.model.lock().unwrap();
+        let model: MutexGuard<'_, ZeroShotClassificationModel> = state.llm_resources.prompt_classification_model.model.lock().unwrap();
         let input = [payload.prompt.as_deref().unwrap_or_default()];
-        let output = model.predict(&input);
+
+        let router_categories: &[Category] = &router.prompt_calification_model_categories;
+        let candidate_labels: Vec<&str> = router_categories
+            .iter()
+            .map(|category| category.label.as_str())
+            .collect();
+
+        let output = match model.predict_multilabel(
+                input,
+                candidate_labels,
+                Some(Box::new(|label: &str| {
+                    format!("{label}")
+                })),
+                128,
+            ) {
+            Ok(output) => output,
+            Err(_) => {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(GenericResponse {
+                        message: "error predicting".to_string(),
+                        data: json!({}),
+                        exit_code: 1,
+                    }),
+                );
+            }
+        };
+
+        let prompt_output = output[0].clone();
         drop(model);
+       
+       let (label_text, score) = prompt_output.iter().fold(("", 0.0), |acc, label| {
+           if label.score > acc.1 {
+               (label.text.as_str(), label.score)
+           } else {
+               acc
+           }
+       });
 
         for category in router.prompt_calification_model_categories {
-            if category.label == output[0].text {
+            if category.label == label_text {
                 return (
                     StatusCode::OK,
                     Json(GenericResponse {
@@ -211,7 +248,7 @@ pub async fn process_prompt(
                                 single_model_output: None,
                                 prompt_calification_model_used: true,
                                 prompt_calification_model_output: Some(category.model),
-                                prompt_calification_model_output_precision: output[0].score,
+                                prompt_calification_model_output_precision: score,
                                 sentence_match_used: false,
                                 exact_sentence_match_used: false,
                                 cosine_similarity_sentence_match_used: false,

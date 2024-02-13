@@ -12,7 +12,8 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use mongodb::Client as MongoClient;
 use r2d2::Pool;
 use redis::Client as RedisClient;
-use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType}, sequence_classification::{SequenceClassificationConfig, SequenceClassificationModel}}, resources::RemoteResource, RustBertError};
+use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType}, zero_shot_classification::{ZeroShotClassificationConfig, ZeroShotClassificationModel}}, resources::RemoteResource, RustBertError};
+use tokio::task;
 use std::{env, sync::{Arc, Mutex}, time::Duration};
 
 use tower_http::timeout::TimeoutLayer;
@@ -200,12 +201,12 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
         Err(_) => panic!("PROMPT_CLASSIFICATION_MODEL_URL not found"),
     };
 
-    let prompt_classification_model = match create_prompt_classify_model(&prompt_classification_model_name, &prompt_classification_model_url).await {
+    let zero_shot_prompt_classification_model = match zero_shot_create_prompt_classify_model(&prompt_classification_model_name, &prompt_classification_model_url).await {
         Ok(model) => model,
         Err(e) => panic!("Error creating prompt classification model: {}", e),
     };
 
-    let safe_prompt_classification_model = Arc::new(Box::new(Mutex::new(prompt_classification_model)));
+    let zero_shot_safe_prompt_classification_model = Arc::new(Box::new(Mutex::new(zero_shot_prompt_classification_model)));
 
     let embedding_model = match SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model() {
         Ok(model) => model,
@@ -216,7 +217,7 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
 
     let llm_resources = crate::types::state::LLMResources {
         prompt_classification_model: crate::types::state::PromptClassificationModel {
-            model: safe_prompt_classification_model,
+            model: zero_shot_safe_prompt_classification_model,
             name: prompt_classification_model_name,
             url: prompt_classification_model_url,
         },
@@ -241,7 +242,8 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
     return app_state;
 }
 
-pub async fn create_prompt_classify_model(name: &String, url: &String) -> Result<SequenceClassificationModel, RustBertError> {
+// test function to test with another different model
+pub async fn zero_shot_create_prompt_classify_model(name: &String, url: &String) -> Result<ZeroShotClassificationModel, RustBertError> {
     info!("Loading Prompt Classification Model: {} from: {}", name, url);                 
     let config_resource = Box::new(RemoteResource::from_pretrained((
         name,
@@ -258,13 +260,22 @@ pub async fn create_prompt_classify_model(name: &String, url: &String) -> Result
         &format!("{}/resolve/main/rust_model.ot", url).to_string()
     ))));
 
-    let config = SequenceClassificationConfig {
-        model_type: ModelType::Bert,
+    let config = ZeroShotClassificationConfig {
+        model_type: ModelType::DistilBert,
         model_resource,
         config_resource,
         vocab_resource,
         ..Default::default()
     };
 
-    return SequenceClassificationModel::new(config);
+    let model_result = task::spawn_blocking(move || {
+        return ZeroShotClassificationModel::new(config);
+    }).await;
+
+    let model_result = match model_result {
+        Ok(result) => result,
+        Err(e) => return Err(RustBertError::TchError(e.to_string())),
+    };
+
+    return model_result;
 }

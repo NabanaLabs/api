@@ -13,6 +13,17 @@ primary_region = 'bog'
   dockerfile = 'Dockerfile'
 
 [env]
+  # not official env vars, only for testing
+  RUST_BACKTRACE="1"
+  MONGO_URI="mongodb+srv://test:test@jean.zjitk.mongodb.net/?retryWrites=true&w=majority" # "test:test"
+  REDIS_URI="rediss://default:d42e5d3c036e4088a81427b9487f4921@enabled-newt-45273.upstash.io:45273" # change password
+  POSTGRES_URI="" 
+  LEMONSQUEEZY_WEBHOOK_SIGNATURE_KEY="test" # dont matters right now
+  BREVO_CUSTOMERS_WEBFLOW_API_KEY="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" # "test"
+  GOOGLE_OAUTH_CLIENT_SECRET="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" # "test app"
+  API_TOKENS_SIGNING_KEY="test" # dont matters right now
+  # end of not official env vars
+
   API_TOKENS_EXPIRATION_TIME = '86400'
   API_URL = 'nabana-labs-api.fly.dev'
   BREVO_CUSTOMERS_LIST_ID = '7'
@@ -25,8 +36,8 @@ primary_region = 'bog'
   HOST = '0.0.0.0'
   MONGO_DB_NAME = 'test'
   PORT = '8080'
-  PROMPT_CLASSIFICATION_MODEL_NAME = 'jane'
-  PROMPT_CLASSIFICATION_MODEL_URL = 'https://huggingface.co/jeanvydes/jane'
+  PROMPT_CLASSIFICATION_MODEL_NAME = 'facebook/bart-large-mnli'
+  PROMPT_CLASSIFICATION_MODEL_URL = "https://huggingface.co/facebook/bart-large-mnli" # 'https://huggingface.co/jeanvydes/jane'
   PRO_ANNUALLY_VARIANT_ID = '202400'
   PRO_MONTHLY_VARIANT_ID = '202405'
   PRO_PRODUCT_ID = '160756'
@@ -38,6 +49,8 @@ primary_region = 'bog'
   auto_start_machines = true
   min_machines_running = 0
   processes = ['app']
+  [http_service.http_options]
+    h2_backend = true
 
 [[vm]]
   cpu_kind = 'shared'

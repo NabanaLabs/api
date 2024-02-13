@@ -18,7 +18,7 @@ RUN apt update &&\
     apt install -y cmake &&\
     apt install -y clang &&\
     apt install -y pkgconf &&\
-    apt-get install -y pkg-config libssl-dev libpq-dev wget unzip
+    apt-get install -y pkg-config openssl libssl-dev libpq-dev wget unzip
 
 # Download the file using wget
 RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip -O libtorch.zip
@@ -34,20 +34,6 @@ ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH
 # Build the Rust application
 RUN cargo build
 
-# Runtime Stage
-FROM fedora:34 AS runner
-
-# Set the environment variables in runner
-ENV LIBTORCH=/usr/src/app/libtorch
-ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH
-
-# Postgres
-RUN dnf install -y libpq
-
 # Expose the port
 EXPOSE 8080
-# Copy the binary from the builder stage to the runner stage
-COPY --from=builder /usr/src/app/libtorch /usr/src/app/libtorch
-# Copy the binary from the builder stage to the runner stage
-COPY --from=builder /usr/src/app/target/debug/app /bin/app
-ENTRYPOINT ["/bin/app"]
+ENTRYPOINT ["/usr/src/app/target/debug/app"]
