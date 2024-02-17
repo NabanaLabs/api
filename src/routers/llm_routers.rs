@@ -1,7 +1,7 @@
 use axum::BoxError;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
-use axum::{Router, routing::{get, post}};
+use axum::{Router, routing::post};
 use crate::controllers::llm_routers::process_prompt;
 use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
@@ -20,7 +20,7 @@ pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppS
                 move |payload| process_prompt(payload, app_state)
             }),
         )
-        .route(
+        /*.route(
             // check if prompt is in cache
             "/prompt/cache",
             get({
@@ -35,7 +35,7 @@ pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppS
                 let app_state = Arc::clone(&app_state);
                 move |payload| process_prompt(payload, app_state)
             }),
-        )
+        ) */
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|err: BoxError| async move {
@@ -45,6 +45,6 @@ pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppS
                     )
                 }))
                 .layer(BufferLayer::new(256))
-                .layer(RateLimitLayer::new(30, Duration::from_secs(60))),
+                .layer(RateLimitLayer::new(256, Duration::from_secs(60))),
         );
 }

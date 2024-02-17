@@ -34,6 +34,7 @@ pub enum LLMRouterMessages {
     RequiredRouterIDField,
     RequiredPromptField,
     RequiredCacheField,
+    NotProccesed
 }
 
 
@@ -153,6 +154,7 @@ impl ToString for LLMRouterMessages {
             LLMRouterMessages::RequiredRouterIDField => "llm_router.required_router_id_field".to_string(),
             LLMRouterMessages::RequiredPromptField => "llm_router.required_prompt_field".to_string(),
             LLMRouterMessages::RequiredCacheField => "llm_router.required_cache_field".to_string(),
+            LLMRouterMessages::NotProccesed => "llm_router.not_proccesed".to_string(),
         }
     }
 }

@@ -7,10 +7,11 @@ app = 'nabana-labs-api'
 primary_region = 'bog'
 
 [experimental]
-  cmd = ['/bin/app']
+  cmd = ['/usr/src/app/target/debug/app']
 
 [build]
-  dockerfile = 'Dockerfile'
+  dockerfile = 'Dockerfile.dev'
+  #build-target = 'runtime'
 
 [env]
   # not official env vars, only for testing
@@ -55,4 +56,4 @@ primary_region = 'bog'
 [[vm]]
   cpu_kind = 'shared'
   cpus = 2
-  memory_mb = 2048
+  memory_mb = 4096

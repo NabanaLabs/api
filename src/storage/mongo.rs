@@ -1,4 +1,5 @@
 use axum::{Json, http::StatusCode};
+use log::error;
 use mongodb::{
     bson::{doc, Document}, options::ClientOptions, options::ServerApi, options::ServerApiVersion, Client, Database, Collection,
 };
@@ -87,7 +88,8 @@ pub async fn find_organization(db: &Database, filter: Document) -> Result<(bool,
             Some(org) => Ok((true, Some(org))),
             None => Ok((false, None)),
         },
-        Err(_) => {
+        Err(e) => {
+            error!("error fetching organization: {}", e);
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GenericResponse {

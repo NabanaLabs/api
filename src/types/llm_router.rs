@@ -1,12 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use super::organization::ModelObject;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Category {
     pub label: String,
     pub description: String,
-    pub model: ModelObject,
+    pub model_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,7 +13,7 @@ pub struct Sentence {
     pub exact: bool,
     pub use_cosine_similarity: bool,
     pub cosine_similarity_temperature: f32,
-    pub model: ModelObject,
+    pub model_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,7 +33,7 @@ pub struct Router {
 
     // do nothing haha
     pub use_single_model: bool,
-    pub model: ModelObject,
+    pub model_id: String,
 
     // https://github.com/NabanaLabs/albert-prompt-classification
     pub use_prompt_calification_model: bool,

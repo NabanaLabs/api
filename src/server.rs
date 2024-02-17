@@ -208,9 +208,16 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
 
     let zero_shot_safe_prompt_classification_model = Arc::new(Box::new(Mutex::new(zero_shot_prompt_classification_model)));
 
-    let embedding_model = match SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model() {
+    let embedding_model_result = match task::spawn_blocking(move || {
+        SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model()
+    }).await.map_err(|e| RustBertError::TchError(e.to_string())) {
         Ok(model) => model,
-        Err(e) => panic!("Error creating sentence embeddings model: {}", e),
+        Err(e) => panic!("Error creating sentence embedding model: {}", e),
+    };
+
+    let embedding_model = match embedding_model_result {
+        Ok(model) => model,
+        Err(e) => panic!("Error creating sentence embedding model: {}", e),
     };
 
     let safe_embedding_model = Arc::new(Box::new(Mutex::new(embedding_model)));
@@ -266,7 +273,7 @@ pub async fn zero_shot_create_prompt_classify_model(name: &String, url: &String)
     ))));
 
     let config = ZeroShotClassificationConfig {
-        model_type: ModelType::DistilBert,
+        model_type: ModelType::Bart,
         model_resource,
         config_resource,
         vocab_resource,
@@ -275,13 +282,8 @@ pub async fn zero_shot_create_prompt_classify_model(name: &String, url: &String)
     };
 
     let model_result = task::spawn_blocking(move || {
-        return ZeroShotClassificationModel::new(config);
-    }).await;
-
-    let model_result = match model_result {
-        Ok(result) => result,
-        Err(e) => return Err(RustBertError::TchError(e.to_string())),
-    };
+        ZeroShotClassificationModel::new(config)
+    }).await.map_err(|e| RustBertError::TchError(e.to_string()))?;
 
     return model_result;
 }

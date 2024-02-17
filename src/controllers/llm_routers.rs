@@ -1,28 +1,52 @@
 use std::sync::{Arc, MutexGuard};
 
 use axum::{extract::rejection::JsonRejection, http::StatusCode, Json};
-use log::debug;
 use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{storage::mongo::{build_organizations_filter, find_organization}, types::{customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category, organization::ModelObject, state::AppState}, utilities::{api_messages::{APIMessages, LLMRouterMessages}, helpers::{detect_similar_sentences, payload_analyzer}}};
+use crate::{
+    storage::mongo::{build_organizations_filter, find_organization},
+    types::{
+        customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category,
+        organization::ModelObject, state::AppState,
+    },
+    utilities::{
+        api_messages::{APIMessages, LLMRouterMessages},
+        helpers::{detect_similar_sentences, payload_analyzer},
+    },
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PromptClassification {
+    pub used: bool,
+    pub label: Option<String>,
+    pub precision: Option<f64>,
+    pub model: Option<ModelObject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SingleModel {
+    pub used: bool,
+    pub model: Option<ModelObject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SentenceMatching {
+    pub used: bool,
+    pub exact: bool,
+    pub cosine_similarity: bool,
+    pub similarity_level: Option<f32>,
+    pub temperature: Option<f32>,
+    pub appropiate_match: bool,
+    pub model: Option<ModelObject>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProccesedPrompt {
-    pub single_model_used: bool,
-    pub single_model_output: Option<ModelObject>,
-
-    pub prompt_calification_model_used: bool,
-    pub prompt_calification_model_output: Option<ModelObject>,
-    pub prompt_calification_model_output_precision: f64,
-
-    pub sentence_match_used: bool,
-    pub exact_sentence_match_used: bool,
-    pub cosine_similarity_sentence_match_used: bool,
-    pub cosine_similarity_score: f32,
-    pub cosine_similarity_temperature: f32,
-    pub sentence_match_output: Option<ModelObject>,
+    pub single_model: Option<SingleModel>,
+    pub prompt_calification: Option<PromptClassification>,
+    pub sentence_matching: Option<SentenceMatching>,
 
     pub prompt: String,
     pub prompt_size: i32,
@@ -43,8 +67,10 @@ pub async fn process_prompt(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(GenericResponse {
-                    message: "required organization_id".to_string(),
-                    data: json!({}),
+                    message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                    data: json!({
+                        "reason": "required.org.id".to_string(),
+                    }),
                     exit_code: 1,
                 }),
             );
@@ -57,8 +83,10 @@ pub async fn process_prompt(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(GenericResponse {
-                    message: "required router_id".to_string(),
-                    data: json!({}),
+                    message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                    data: json!({
+                        "reason": "required.router.id".to_string(),
+                    }),
                     exit_code: 1,
                 }),
             );
@@ -71,20 +99,24 @@ pub async fn process_prompt(
             return (
                 StatusCode::BAD_REQUEST,
                 Json(GenericResponse {
-                    message: APIMessages::LLMRouter(LLMRouterMessages::RequiredPromptField).to_string(),
-                    data: json!({}),
+                    message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                    data: json!({
+                        "reason": APIMessages::LLMRouter(LLMRouterMessages::RequiredPromptField).to_string(),
+                    }),
                     exit_code: 1,
                 }),
             );
         }
     };
 
-    if org_id.is_empty() || org_id.len() != 32 {
+    if org_id.is_empty() {
         return (
             StatusCode::BAD_REQUEST,
             Json(GenericResponse {
-                message: "invalid org id".to_string(),
-                data: json!({}),
+                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                data: json!({
+                    "reason": "invalid.org.id".to_string(),
+                }),
                 exit_code: 1,
             }),
         );
@@ -100,8 +132,10 @@ pub async fn process_prompt(
         return (
             StatusCode::NOT_FOUND,
             Json(GenericResponse {
-                message: "organization not found".to_string(),
-                data: json!({}),
+                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                data: json!({
+                    "reason": "org.not.found".to_string(),
+                }),
                 exit_code: 1,
             }),
         );
@@ -123,8 +157,10 @@ pub async fn process_prompt(
             return (
                 StatusCode::NOT_FOUND,
                 Json(GenericResponse {
-                    message: "router not found".to_string(),
-                    data: json!({}),
+                    message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                    data: json!({
+                        "reason": "router.not.found".to_string(),
+                    }),
                     exit_code: 1,
                 }),
             );
@@ -135,34 +171,47 @@ pub async fn process_prompt(
         return (
             StatusCode::FORBIDDEN,
             Json(GenericResponse {
-                message: "unavailable router".to_string(),
-                data: json!({}),
+                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                data: json!({
+                    "reason": "unavailable.router".to_string(),
+                }),
                 exit_code: 1,
             }),
         );
     }
 
     if router.use_single_model {
+        let selected_model_object =
+            match org.models.iter().find(|model| model.id == router.model_id) {
+                Some(model) => model,
+                None => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(GenericResponse {
+                            message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed)
+                                .to_string(),
+                            data: json!({
+                                "reason": "model not found".to_string(),
+                            }),
+                            exit_code: 1,
+                        }),
+                    );
+                }
+            };
+
         return (
             StatusCode::OK,
             Json(GenericResponse {
-                message: "proccesed".to_string(),
-                data: json!({
-                    "proccesed_prompt_result": ProccesedPrompt {
-                        single_model_used: true,
-                        single_model_output: Some(router.model),
-                        prompt_calification_model_used: false,
-                        prompt_calification_model_output: None,
-                        prompt_calification_model_output_precision: 0.0,
-                        sentence_match_used: false,
-                        exact_sentence_match_used: false,
-                        cosine_similarity_sentence_match_used: false,
-                        cosine_similarity_score: 0.0,
-                        cosine_similarity_temperature: 0.0,
-                        sentence_match_output: None,
-                        prompt: prompt.to_string(),
-                        prompt_size: prompt.len().try_into().unwrap(),
-                    },
+                message: "ok".to_string(),
+                data: json!(ProccesedPrompt {
+                    single_model: Some(SingleModel {
+                        used: true,
+                        model: Some(selected_model_object.clone()),
+                    }),
+                    prompt_calification: None,
+                    sentence_matching: None,
+                    prompt: prompt.to_string(),
+                    prompt_size: prompt.len().try_into().unwrap(),
                 }),
                 exit_code: 0,
             }),
@@ -173,8 +222,10 @@ pub async fn process_prompt(
         return (
             StatusCode::BAD_REQUEST,
             Json(GenericResponse {
-                message: APIMessages::LLMRouter(LLMRouterMessages::RequiredPromptField).to_string(),
-                data: json!({}),
+                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                data: json!({
+                    "reason": "required prompt field".to_string(),
+                }),
                 exit_code: 1,
             }),
         );
@@ -184,18 +235,25 @@ pub async fn process_prompt(
         return (
             StatusCode::BAD_REQUEST,
             Json(GenericResponse {
-                message: format!(
-                    "prompt length must be between 1 and {}",
-                    router.max_prompt_length
-                ),
-                data: json!({}),
+                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                data: json!({
+                    "reason": format!(
+                        "prompt length must be between 1 and {}",
+                        router.max_prompt_length
+                    ),
+                }),
                 exit_code: 1,
             }),
         );
     }
 
     if router.use_prompt_calification_model {
-        let model: MutexGuard<'_, ZeroShotClassificationModel> = state.llm_resources.prompt_classification_model.model.lock().unwrap();
+        let model: MutexGuard<'_, ZeroShotClassificationModel> = state
+            .llm_resources
+            .prompt_classification_model
+            .model
+            .lock()
+            .unwrap();
         let input = [payload.prompt.as_deref().unwrap_or_default()];
 
         let router_categories: &[Category] = &router.prompt_calification_model_categories;
@@ -205,20 +263,21 @@ pub async fn process_prompt(
             .collect();
 
         let output = match model.predict_multilabel(
-                input,
-                candidate_labels,
-                Some(Box::new(|label: &str| {
-                    format!("{label}")
-                })),
-                128,
-            ) {
+            input,
+            candidate_labels,
+            Some(Box::new(|label: &str| format!("{label}"))),
+            128,
+        ) {
             Ok(output) => output,
             Err(_) => {
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(GenericResponse {
-                        message: "error predicting".to_string(),
-                        data: json!({}),
+                        message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed)
+                            .to_string(),
+                        data: json!({
+                            "reason": "model couldn't predict".to_string(),
+                        }),
                         exit_code: 1,
                     }),
                 );
@@ -227,49 +286,66 @@ pub async fn process_prompt(
 
         let prompt_output = output[0].clone();
         drop(model);
-       
-       let (label_text, score) = prompt_output.iter().fold(("", 0.0), |acc, label| {
-           if label.score > acc.1 {
-               (label.text.as_str(), label.score)
-           } else {
-               acc
-           }
-       });
+
+        let (label_text, score) = prompt_output.iter().fold(("", 0.0), |acc, label| {
+            if label.score > acc.1 {
+                (label.text.as_str(), label.score)
+            } else {
+                acc
+            }
+        });
 
         for category in router.prompt_calification_model_categories {
             if category.label == label_text {
+                let selected_model_object = match org
+                    .models
+                    .iter()
+                    .find(|model| model.id == category.model_id)
+                {
+                    Some(model) => model,
+                    None => {
+                        return (
+                            StatusCode::NOT_FOUND,
+                            Json(GenericResponse {
+                                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed)
+                                    .to_string(),
+                                data: json!({
+                                    "reason": "category specified model not found in mode list".to_string(),
+                                }),
+                                exit_code: 1,
+                            }),
+                        );
+                    }
+                };
+
                 return (
                     StatusCode::OK,
                     Json(GenericResponse {
-                        message: "proccesed".to_string(),
-                        data: json!({
-                            "proccesed_prompt_result": ProccesedPrompt {
-                                single_model_used: false,
-                                single_model_output: None,
-                                prompt_calification_model_used: true,
-                                prompt_calification_model_output: Some(category.model),
-                                prompt_calification_model_output_precision: score,
-                                sentence_match_used: false,
-                                exact_sentence_match_used: false,
-                                cosine_similarity_sentence_match_used: false,
-                                cosine_similarity_score: 0.0,
-                                cosine_similarity_temperature: 0.0,
-                                sentence_match_output: None,
-                                prompt: prompt.to_string(),
-                                prompt_size: prompt.len().try_into().unwrap(),
-                            },
+                        message: "ok".to_string(),
+                        data: json!(ProccesedPrompt {
+                            single_model: None,
+                            prompt_calification: Some(PromptClassification {
+                                used: true,
+                                label: Some(label_text.to_string()),
+                                precision: Some(score),
+                                model: Some(selected_model_object.clone()),
+                            }),
+                            sentence_matching: None,
+                            prompt: prompt.to_string(),
+                            prompt_size: prompt.len().try_into().unwrap(),
                         }),
                         exit_code: 0,
                     }),
                 );
             }
 
-
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(GenericResponse {
-                    message: "model output a unknown value".to_string(),
-                    data: json!({}),
+                    message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                    data: json!({
+                        "reason": "unknown label category".to_string(),
+                    }),
                     exit_code: 1,
                 }),
             );
@@ -277,47 +353,97 @@ pub async fn process_prompt(
     }
 
     if router.use_sentence_matching {
-        for sentence in router.sentences {
+        for (index, sentence) in router.sentences.iter().enumerate() {
+            let selected_model_object = match org
+                .models
+                .iter()
+                .find(|model| model.id == sentence.model_id)
+            {
+                Some(model) => model,
+                None => {
+                    return (
+                        StatusCode::NOT_FOUND,
+                        Json(GenericResponse {
+                            message: "model not found".to_string(),
+                            data: json!({}),
+                            exit_code: 1,
+                        }),
+                    );
+                }
+            };
+
             if sentence.exact && sentence.text.to_lowercase() == prompt.to_lowercase() {
                 return (
                     StatusCode::OK,
                     Json(GenericResponse {
-                        message: "proccesed".to_string(),
-                        data: json!({
-                            "proccesed_prompt_result": ProccesedPrompt {
-                                single_model_used: false,
-                                single_model_output: None,
-                                prompt_calification_model_used: false,
-                                prompt_calification_model_output: None,
-                                prompt_calification_model_output_precision: 0.0,
-                                sentence_match_used: true,
-                                exact_sentence_match_used: true,
-                                cosine_similarity_sentence_match_used: false,
-                                cosine_similarity_score: 0.0,
-                                cosine_similarity_temperature: 0.0,
-                                sentence_match_output: Some(sentence.model),
-                                prompt: prompt.to_string(),
-                                prompt_size: prompt.len().try_into().unwrap(),
-                            },
+                        message: "ok".to_string(),
+                        data: json!(ProccesedPrompt {
+                            single_model: None,
+                            prompt_calification: None,
+                            sentence_matching: Some(SentenceMatching {
+                                used: true,
+                                exact: true,
+                                cosine_similarity: false,
+                                similarity_level: None,
+                                temperature: None,
+                                appropiate_match: true,
+                                model: Some(selected_model_object.clone()),
+                            }),
+                            prompt: prompt.to_string(),
+                            prompt_size: prompt.len().try_into().unwrap(),
                         }),
                         exit_code: 0,
                     }),
                 );
             } else if sentence.use_cosine_similarity {
                 // embedding model
-                let (similar, score) = match detect_similar_sentences(&state.llm_resources.embedding_model, sentence.text, prompt.to_string(), sentence.cosine_similarity_temperature).await {
+                let (similar, score) = match detect_similar_sentences(
+                    &state.llm_resources.embedding_model,
+                    sentence.text.clone(),
+                    prompt.to_string(),
+                    sentence.cosine_similarity_temperature,
+                )
+                .await
+                {
                     Ok((similar, score)) => (similar, score),
                     Err(_) => {
                         return (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             Json(GenericResponse {
-                                message: "error detecting similar sentences".to_string(),
-                                data: json!({}),
+                                message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
+                                data: json!({
+                                    "reason": "error detecting similar sentences".to_string(),
+                                }),
                                 exit_code: 1,
                             }),
                         );
                     }
                 };
+
+                if index == router.sentences.len() - 1 && !similar {
+                    return (
+                        StatusCode::OK,
+                        Json(GenericResponse {
+                            message: "not matched any sentence propertly".to_string(),
+                            data: json!(ProccesedPrompt {
+                                single_model: None,
+                                prompt_calification: None,
+                                sentence_matching: Some(SentenceMatching {
+                                    used: true,
+                                    exact: false,
+                                    cosine_similarity: true,
+                                    similarity_level: Some(score),
+                                    temperature: Some(sentence.cosine_similarity_temperature),
+                                    appropiate_match: similar,
+                                    model: Some(selected_model_object.clone()),
+                                }),
+                                prompt: prompt.to_string(),
+                                prompt_size: prompt.len().try_into().unwrap(),
+                            }),
+                            exit_code: 1,
+                        }),
+                    );
+                }
 
                 if !similar {
                     continue;
@@ -326,47 +452,35 @@ pub async fn process_prompt(
                 return (
                     StatusCode::OK,
                     Json(GenericResponse {
-                        message: "proccesed".to_string(),
-                        data: json!({
-                            "proccesed_prompt_result": ProccesedPrompt {
-                                single_model_used: false,
-                                single_model_output: None,
-                                prompt_calification_model_used: false,
-                                prompt_calification_model_output: None,
-                                prompt_calification_model_output_precision: 0.0,
-                                sentence_match_used: true,
-                                exact_sentence_match_used: false,
-                                cosine_similarity_sentence_match_used: true,
-                                cosine_similarity_score: score,
-                                cosine_similarity_temperature: sentence.cosine_similarity_temperature,
-                                sentence_match_output: Some(sentence.model),
-                                prompt: prompt.to_string(),
-                                prompt_size: prompt.len().try_into().unwrap(),
-                            },
+                        message: "ok".to_string(),
+                        data: json!(ProccesedPrompt {
+                            single_model: None,
+                            prompt_calification: None,
+                            sentence_matching: Some(SentenceMatching {
+                                used: true,
+                                exact: false,
+                                cosine_similarity: true,
+                                similarity_level: Some(score),
+                                temperature: Some(sentence.cosine_similarity_temperature),
+                                appropiate_match: similar,
+                                model: Some(selected_model_object.clone()),
+                            }),
+                            prompt: prompt.to_string(),
+                            prompt_size: prompt.len().try_into().unwrap(),
                         }),
                         exit_code: 0,
                     }),
                 );
-                
             }
         }
-
-        return (
-            StatusCode::OK,
-            Json(GenericResponse {
-                message: "prompt doesn't match any sentence".to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
     }
 
     return (
         StatusCode::OK,
         Json(GenericResponse {
-            message: "not proccesed".to_string(),
+            message: APIMessages::LLMRouter(LLMRouterMessages::NotProccesed).to_string(),
             data: json!({
-                "reason": "not_method_to_proccesed".to_string(),
+                "reason": "not method select to proccess prompt".to_string(),
             }),
             exit_code: 0,
         }),

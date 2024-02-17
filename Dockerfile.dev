@@ -21,15 +21,17 @@ RUN apt update &&\
     apt-get install -y pkg-config openssl libssl-dev libpq-dev wget unzip
 
 # Download the file using wget
-RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.1.0%2Bcpu.zip -O libtorch.zip
+RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.2.0%2Bcpu.zip -O libtorch.zip
 # Extract the contents of the ZIP file to /usr/libtorch
-RUN unzip -o libtorch.zip
+RUN unzip -o libtorch.zip -d /usr/lib
 # Clean up unnecessary files
 RUN rm libtorch.zip
 
 # Set the environment variables
-ENV LIBTORCH=/usr/src/app/libtorch
+ENV LIBTORCH=/usr/lib/libtorch
 ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH
+
+#RUN rm -rf /root/.cache/.rustbert/
 
 # Build the Rust application
 RUN cargo build
