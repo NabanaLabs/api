@@ -1,6 +1,6 @@
 use crate::{
     routers::{
-        customer_actions::get_customer_actions_router, customers::get_customers_router, identity::get_identity_router, llm::get_llm_routers_router, public::get_public_router, webhooks::get_webhooks_router
+        customers::get_customers_router, identity::get_identity_router, core::get_core_router, webhooks::get_webhooks_router
     }, types::{lemonsqueezy::Products, state::{AppState, EmailProviderSettings, GoogleAuth, MasterEmailEntity}}, utilities::helpers::fallback
 };
 use axum::{
@@ -27,17 +27,9 @@ use log::info;
 pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, postgres_conn: Option<Pool<ConnectionManager<PgConnection>>>) {
     let app_state = set_app_state(mongodb_client, redis_connection, postgres_conn).await;
 
-    // show products, for testing purposes
-    info!("Products: {:?}", app_state.products);
-
-    // /api/public
-    let public = get_public_router(app_state.clone()).await;
     // /api/customers
     let customers = get_customers_router(app_state.clone()).await;
     info!("Customers router loaded");
-    // /api/me
-    let customers_actions = get_customer_actions_router(app_state.clone()).await;
-    info!("Customers actions router loaded");
     // /api/identity
     let identity = get_identity_router(app_state.clone()).await;
     info!("Identity router loaded");
@@ -45,16 +37,14 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
     let webhooks = get_webhooks_router(app_state.clone()).await;
     info!("Webhooks router loaded");
     // /api/llm/routers
-    let llmrouters = get_llm_routers_router(app_state.clone()).await;
-    info!("LLM Routers router loaded");
+    let core = get_core_router(app_state.clone()).await;
+    info!("Core router loaded");
     // /api
     let api = Router::new()
-        .nest("/public", public)
         .nest("/customers", customers)
-        .nest("/me", customers_actions)
         .nest("/identity", identity)
         .nest("/webhooks", webhooks)
-        .nest("/llm/routers", llmrouters);
+        .nest("/core", core);
 
     info!("API router loaded");
 
@@ -64,7 +54,7 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
         .allow_origin(Any);
 
     let app = Router::new()
-        .route("/health", get(|| async { "OK" }))
+        .route("/service/health", get(|| async { "OK" }))
         .nest("/api", api)
         .layer(cors)
         .layer(CompressionLayer::new())

@@ -47,7 +47,5 @@ pub struct VerifyEmailQueryParams {
 
 #[derive(Debug, Deserialize)]
 pub struct ProcessPrompt {
-    pub organization_id: Option<String>,
-    pub router_id: Option<String>,
     pub prompt: Option<String>,
 }

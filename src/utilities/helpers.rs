@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::types::{customer::{GenericResponse, CustomerType}, subscription::SubscriptionHistoryLog};
 use axum::{
     extract::rejection::JsonRejection,
-    http::{StatusCode, Uri},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri},
     Json,
 };
 use mongodb::bson::{to_document, Document};
@@ -167,6 +167,8 @@ pub async fn detect_similar_sentences(model: &Arc<Box<Mutex<SentenceEmbeddingsMo
 
     return Ok((true, similarity));
 }
+
+// response helpers
 
 pub fn ok(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
     let data = match data {

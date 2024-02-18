@@ -1,15 +1,28 @@
 use std::sync::{Arc, MutexGuard};
 
-use axum::{extract::rejection::JsonRejection, http::StatusCode, Json};
-use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
-use serde::{Deserialize, Serialize};
 use crate::{
     storage::mongo::{build_organizations_filter, find_organization},
     types::{
-        customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category, llms::LLMs, openai_models::OpenAIModels, organization::ModelObject, state::AppState
+        customer::GenericResponse,
+        incoming_requests::ProcessPrompt,
+        llm_router::Category,
+        llms::LLMs,
+        openai_models::OpenAIModels,
+        organization::{AccessTokenScopes, ModelObject},
+        state::AppState,
     },
-    utilities::helpers::{bad_request, detect_similar_sentences, ok, payload_analyzer},
+    utilities::helpers::{
+        bad_request, detect_similar_sentences, internal_server_error, ok, payload_analyzer,
+        unauthorized,
+    },
 };
+use axum::{
+    extract::rejection::JsonRejection,
+    http::{HeaderMap, StatusCode},
+    Json,
+};
+use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptClassification {
@@ -47,25 +60,62 @@ pub struct ProccesedPrompt {
 }
 
 pub async fn process_prompt(
+    headers: HeaderMap,
     payload_result: Result<Json<ProcessPrompt>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let payload = payload_analyzer(payload_result)?;
 
-    if payload.organization_id.is_none() || payload.router_id.is_none() || payload.prompt.is_none() {
-        return Err(bad_request("invalid.org.id", None));
+    let org_id = match headers.get("OrganizationID") {
+        Some(orgid) => orgid,
+        None => return Err(unauthorized("organization.id", None)),
+    };
+
+    let router_id = match headers.get("RouterID") {
+        Some(routerid) => routerid,
+        None => return Err(unauthorized("router.id", None)),
+    };
+
+    let org_access_token = match headers.get("Authorization") {
+        Some(routerid) => routerid,
+        None => return Err(unauthorized("", None)),
+    };
+
+    if org_id.is_empty() || router_id.is_empty() || payload.prompt.is_none() {
+        return Err(bad_request("invalid.payload.and.or.headers", None));
     }
 
-    let org_id = payload.organization_id.as_deref().unwrap();
-    let router_id = payload.router_id.as_deref().unwrap();
+    let router_id = router_id.to_str().unwrap();
+    let org_id = org_id.to_str().unwrap();
+    let org_access_token = org_access_token.to_str().unwrap();
     let prompt = payload.prompt.as_deref().unwrap();
-
-    if org_id.is_empty() {
-        return Err(bad_request("invalid.org.id", None));
-    }
 
     let filter = build_organizations_filter(org_id).await;
     let org = find_organization(&state.mongo_db, filter).await?;
+
+    let mut authorized = false;
+    for access_token in &org.access_tokens {
+        if access_token.token == org_access_token {
+            authorized = true;
+            break;
+        }
+    }
+
+    if !authorized {
+        return Err(unauthorized("unauthorized.access.token", None));
+    }
+
+    let required_scope: Vec<String> = vec![
+        AccessTokenScopes::AccessPromptModelSuggestion.to_string(),
+        AccessTokenScopes::Admin.to_string(),
+    ];
+
+    if !org.access_tokens.iter().any(|access_token| {
+        access_token.token == org_access_token && 
+        access_token.scopes.iter().any(|scope| required_scope.contains(&scope.to_string()))
+    }) {
+        return Err(unauthorized("unauthorized.access.token.scopes", None));
+    }
 
     let router = match org.routers.into_iter().find(|r| r.id == router_id) {
         Some(router) => {
@@ -74,7 +124,7 @@ pub async fn process_prompt(
             }
 
             router
-        },
+        }
         None => {
             return Err(bad_request("router.not.found", None));
         }
@@ -170,7 +220,7 @@ pub async fn process_prompt(
                     prompt: prompt.to_string(),
                     prompt_size: prompt.len().try_into().unwrap(),
                 };
-                
+
                 return Ok(ok("ok", Some(serde_json::to_value(data).unwrap())));
             }
 
@@ -273,7 +323,8 @@ pub async fn process_prompt(
     return Err(bad_request("prompt.calification.error", None));
 }
 
-pub async fn get_models_list() -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+pub async fn get_models_list(
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let data = LLMs::all_models_info();
     Ok(ok("ok", Some(serde_json::to_value(data).unwrap())))
 }

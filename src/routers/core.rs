@@ -10,12 +10,12 @@ use std::{sync::Arc, time::Duration};
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};
 
 // /api/core
-pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
+pub async fn get_core_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     return Router::new()
         .route(
             // suggest and model and cache it
             // if cache is not empty, return the cached response
-            "/get/models",
+            "/models",
             get({
                 move || get_models_list()
             }),
@@ -26,7 +26,7 @@ pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppS
             "/prompt",
             post({
                 let app_state = Arc::clone(&app_state);
-                move |payload| process_prompt(payload, app_state)
+                move |(headers, payload)| process_prompt(headers, payload, app_state)
             }),
         )
         /*.route(

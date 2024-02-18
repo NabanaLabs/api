@@ -16,6 +16,7 @@ use crate::controllers::identity::SessionScopes;
 use crate::types::customer::GenericResponse;
 
 use super::api_messages::{APIMessages, RedisMessages, TokenMessages};
+use super::helpers::{internal_server_error, unauthorized};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
@@ -131,22 +132,8 @@ pub async fn extract_token_from_headers(headers: &HeaderMap) -> Result<&str, (St
     match headers.get("Authorization") {
         Some(token) => match token.to_str() {
             Ok(token) => Ok(token),
-            Err(_) => Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Token(TokenMessages::ErrorParsingToken).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )),
+            Err(_) => Err(internal_server_error("", None)),
         },
-        None => Err((
-            StatusCode::UNAUTHORIZED,
-            Json(GenericResponse {
-                message: APIMessages::Token(TokenMessages::NotAuthorizationHeader).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        )),
+        None => Err(unauthorized("", None)),
     }
 }
