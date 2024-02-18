@@ -6,7 +6,6 @@ use jsonwebtoken::{
 use redis::Commands;
 use redis::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::{
     env,
     time::{SystemTime, UNIX_EPOCH},
@@ -15,8 +14,8 @@ use std::{
 use crate::controllers::identity::SessionScopes;
 use crate::types::customer::GenericResponse;
 
-use super::api_messages::{APIMessages, RedisMessages, TokenMessages};
-use super::helpers::{internal_server_error, unauthorized};
+use super::api_messages::{APIMessages, TokenMessages};
+use super::helpers::{bad_request, internal_server_error, unauthorized};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {

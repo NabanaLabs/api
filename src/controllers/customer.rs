@@ -1,5 +1,5 @@
 use crate::email::brevo_api::send_create_contact_request;
-use crate::storage::mongo::{build_customer_filter, find_customer, update_customer};
+use crate::storage::mongo::{build_customer_filter, find_customer, get_customers_collection, update_customer};
 use crate::types::customer::{
     AuthProviders, Customer, Email, Preferences, PrivateSensitiveCustomer,
 };
@@ -9,7 +9,7 @@ use crate::types::incoming_requests::{
 use crate::types::state::AppState;
 use crate::types::subscription::{Slug, Subscription, SubscriptionFrequencyClass};
 use crate::utilities::helpers::{
-    bad_request, internal_server_error, not_found, ok, parse_class, payload_analyzer, random_string, unauthorized, valid_email, valid_password
+    bad_request, internal_server_error, ok, parse_class, payload_analyzer, random_string, unauthorized, valid_email, valid_password
 };
 use crate::types::customer::GenericResponse;
 
@@ -74,13 +74,11 @@ pub async fn create_customer_record(
     }
 
     let filter = build_customer_filter("", payload.email.to_lowercase().as_str()).await;
-    let (found, _) = match find_customer(&state.mongo_db, filter).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
+    let customer = find_customer(&state.mongo_db, filter).await;
 
-    if found {
-        return Err(bad_request("email.already.registered", None));
+    match customer {
+        Ok(_) => return Err(bad_request("email.already.registered", None)),
+        Err(_) => (),
     }
 
     let emails = vec![Email {
@@ -136,7 +134,7 @@ pub async fn create_customer_record(
         related_orgs: vec![],
     };
 
-    let collection = state.mongo_db.collection("customers");
+    let collection = get_customers_collection(&state.mongo_db).await;
     match collection.insert_one(customer.clone(), None).await {
         Ok(_) => (),
         Err(_) => return Err(internal_server_error("database.error", None)),
@@ -185,7 +183,7 @@ pub async fn fetch_customer_record_by_id(
     Query(params): Query<FetchCustomerByID>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
+    let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
         Err(_) => return Err(unauthorized("invalid.token", None)),
     };
@@ -196,16 +194,7 @@ pub async fn fetch_customer_record_by_id(
     };
 
     let filter = build_customer_filter(customer_id.as_str(), "").await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
-
-    if !found {
-        return Err(not_found("customer.not.found", None));
-    }
-
-    let customer = customer.unwrap();
+    let customer = find_customer(&state.mongo_db, filter).await?;
 
     let mut shared_customer_data = PrivateSensitiveCustomer {
         id: Some(customer_id),
@@ -262,13 +251,12 @@ pub async fn update_name(
     payload_result: Result<Json<CustomerUpdateName>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
+    let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
         Err(_) => return Err(unauthorized("invalid.token", None)),
     };
 
-    if !(session_data.scopes.contains(&SessionScopes::TotalAccess)
-        && session_data.scopes.contains(&SessionScopes::UpdateName))
+    if !(session_data.scopes.contains(&SessionScopes::TotalAccess) && session_data.scopes.contains(&SessionScopes::UpdateName))
     {
         return Err(unauthorized("not.enough.scope", None));
     }
@@ -302,7 +290,7 @@ pub async fn update_password(
     payload_result: Result<Json<CustomerUpdatePassword>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
+    let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
         Err(_) => return Err(unauthorized("invalid.token", None)),
     };
@@ -312,14 +300,7 @@ pub async fn update_password(
     }
 
     let filter = build_customer_filter(session_data.customer_id.as_str(), "").await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
-
-    if !found {
-        return Err(not_found("customer.not.found", None));
-    }
+    let customer = find_customer(&state.mongo_db, filter).await?;
 
     let payload = payload_analyzer(payload_result)?;
 
@@ -348,8 +329,6 @@ pub async fn update_password(
         Ok(hashed_password) => hashed_password,
         Err(_) => return Err(internal_server_error("error.hashing.password", None)),
     };
-
-    let customer = customer.unwrap();
 
     match verify(&payload.old_password, &customer.password) {
         Ok(is_valid) => {

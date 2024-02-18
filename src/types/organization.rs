@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use super::{customer::CustomerID, llm_router::Router};
 
@@ -15,18 +15,42 @@ pub enum ModelOwner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelObject {
     pub id: String,
-    pub model_name: String,
     pub display_name: String,
     pub description: String,
-    pub owner: ModelOwner,
+    pub company: Option<String>,
     pub registered_by: CustomerID,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum MemberRole {
+    Owner,
+    Member,
+    Viewer,
+}
+
+impl MemberRole {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "owner" => Some(Self::Owner),
+            "member" => Some(Self::Member),
+            "viewer" => Some(Self::Viewer),
+            _ => None,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::Owner => String::from("owner"),
+            Self::Member => String::from("member"),
+            Self::Viewer => String::from("viewer"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrgMember {
     pub id: CustomerID,
-    pub email: String,
-    pub role: String,
+    pub role: MemberRole,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

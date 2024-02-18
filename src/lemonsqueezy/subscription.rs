@@ -15,14 +15,7 @@ pub async fn subscription_created(
 ) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter.clone()).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None))
-    };
-
-    if !found {
-        return Err(bad_request("customer.not.found", None));
-    }
+    let customer = find_customer(&state.mongo_db, filter.clone()).await?;
 
     let frequency: SubscriptionFrequencyClass;
     if event.data.attributes.variant_id == state.products.pro_monthly_variant_id {
@@ -32,8 +25,6 @@ pub async fn subscription_created(
     } else {
         return Err(bad_request("subscription.variant.not.found", None));
     }
-
-    let customer = customer.unwrap();
 
     let subscription_id = random_string(15).await;
     let mut history_logs = customer.subscription.history_logs.clone();
@@ -94,14 +85,8 @@ pub async fn subscription_updated(
 ) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
+    let customer = find_customer(&state.mongo_db, filter.clone()).await?;
 
-    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
-
-    if !found {
-        return Err(bad_request("customer.not.found", None));
-    }
-
-    let customer = customer.unwrap();
     let bson_history_logs = add_subscription_history_log_and_to_bson(customer.subscription.history_logs, SubscriptionHistoryLog {
         event: event.meta.event_name,
         date: event.data.attributes.updated_at.clone(),
@@ -127,14 +112,8 @@ pub async fn subscription_update_status(
 ) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
+    let customer = find_customer(&state.mongo_db, filter.clone()).await?;
 
-    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
-
-    if !found {
-        return Err(bad_request("customer.not.found", None));
-    }
-
-    let customer = customer.unwrap();
     let bson_history_logs = add_subscription_history_log_and_to_bson(customer.subscription.history_logs, SubscriptionHistoryLog {
         event: event.meta.event_name,
         date: event.data.attributes.updated_at.clone(),
@@ -158,13 +137,8 @@ pub async fn subscription_update_history_logs(
 ) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
-    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
+    let customer = find_customer(&state.mongo_db, filter.clone()).await?;
 
-    if !found {
-        return Err(bad_request("customer.not.found", None));
-    }
-
-    let customer = customer.unwrap();
     let bson_history_logs = add_subscription_history_log_and_to_bson(customer.subscription.history_logs, SubscriptionHistoryLog {
         event: event.meta.event_name,
         date: event.data.attributes.updated_at.clone(),

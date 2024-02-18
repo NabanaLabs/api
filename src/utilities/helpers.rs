@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::types::{customer::{GenericResponse, CustomerType}, subscription::SubscriptionHistoryLog};
 use axum::{
     extract::rejection::JsonRejection,
-    http::{HeaderMap, HeaderValue, StatusCode, Uri},
+    http::{StatusCode, Uri},
     Json,
 };
 use mongodb::bson::{to_document, Document};

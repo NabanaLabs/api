@@ -23,6 +23,8 @@ use axum::{
 use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
 use serde::{Deserialize, Serialize};
 
+use super::org::extract_access_data;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PromptClassification {
     pub used: bool,
@@ -63,12 +65,8 @@ pub async fn process_prompt(
     payload_result: Result<Json<ProcessPrompt>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let access_data = extract_access_data(&headers, &state).await?;
     let payload = payload_analyzer(payload_result)?;
-
-    let org_id = match headers.get("OrganizationID") {
-        Some(orgid) => orgid,
-        None => return Err(unauthorized("organization.id", None)),
-    };
 
     let router_id = match headers.get("RouterID") {
         Some(routerid) => routerid,
@@ -80,12 +78,12 @@ pub async fn process_prompt(
         None => return Err(unauthorized("", None)),
     };
 
-    if org_id.is_empty() || router_id.is_empty() || payload.prompt.is_none() {
-        return Err(bad_request("invalid.payload.and.or.headers", None));
+    if access_data.org_id.is_empty() || router_id.is_empty() || org_access_token.is_empty() || payload.prompt.is_none() {
+        return Err(bad_request("invalid.payload.headers", None));
     }
 
     let router_id = router_id.to_str().unwrap();
-    let org_id = org_id.to_str().unwrap();
+    let org_id = access_data.org_id.as_str();
     let org_access_token = org_access_token.to_str().unwrap();
     let prompt = payload.prompt.as_deref().unwrap();
 
@@ -184,6 +182,8 @@ pub async fn process_prompt(
         };
 
         let prompt_output = output[0].clone();
+
+        // unlock model to be used in other request
         drop(model);
 
         let (label_text, score) = prompt_output.iter().fold(("", 0.0), |acc, label| {

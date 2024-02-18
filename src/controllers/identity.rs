@@ -33,6 +33,8 @@ pub enum SessionScopes {
     UpdateEmailAddresses,
     UpdatePreferences,
 
+    ManageOrganizations,
+
     TotalAccess, // never use this for 3rd party apps
 }
 
@@ -48,6 +50,8 @@ impl ToString for SessionScopes {
             SessionScopes::UpdateName => String::from("update_name"),
             SessionScopes::UpdateEmailAddresses => String::from("update_email_addresses"),
             SessionScopes::UpdatePreferences => String::from("update_preferences"),
+
+            SessionScopes::ManageOrganizations => String::from("manage_organizations"),
 
             SessionScopes::TotalAccess => String::from("total_access"),
         }
@@ -69,6 +73,8 @@ impl FromStr for SessionScopes {
             "update_email_addresses" => Ok(SessionScopes::UpdateEmailAddresses),
             "update_preferences" => Ok(SessionScopes::UpdatePreferences),
 
+            "manage_organizations" => Ok(SessionScopes::ManageOrganizations),
+
             "total_access" => Ok(SessionScopes::TotalAccess),
             _ => Err(()),
         }
@@ -82,7 +88,7 @@ pub struct SessionData {
 }
 
 pub async fn get_user_session_from_req(
-    headers: HeaderMap,
+    headers: &HeaderMap,
     redis_connection: &Client,
 ) -> Result<SessionData, (StatusCode, Json<GenericResponse>)> {
     let token_string = extract_token_from_headers(&headers)?;
@@ -110,7 +116,7 @@ pub async fn get_session(
     headers: HeaderMap,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
+    let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(id) => id,
         Err(_) => return Err(unauthorized("", None)),
     };
@@ -174,16 +180,8 @@ pub async fn legacy_authentication(
     }
 
     let filter = build_customer_filter("", payload.email.as_str()).await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter).await {
-        Ok((found, customer)) => (found, customer),
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
+    let customer = find_customer(&state.mongo_db, filter).await?;
 
-    if !found {
-        return Err(unauthorized("customer.not.found", None));
-    }
-
-    let customer = customer.unwrap();
     if customer.auth_provider != AuthProviders::LEGACY {
         return Err(unauthorized("invalid.auth.provider", None));
     }
@@ -262,27 +260,24 @@ pub async fn gooogle_authentication(
     };
 
     let filter = build_customer_filter("", &google_user_email).await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter).await {
-        Ok((found, customer)) => (found, customer),
-        Err(_) => return Err(internal_server_error("database.error", None))
+    let customer = match find_customer(&state.mongo_db, filter).await {
+        Ok(customer) => customer,
+        Err(_) => {
+            return Err(not_found("customer.not.found", Some(json!({
+                "action": "create_customer_record",
+                "auth_provider": AuthProviders::GOOGLE,
+                "openid": google_user.id,
+                "email": google_user_email,
+                "verified_email": google_user.verified_email,
+                "name": google_user.name,
+                "given_name": google_user.given_name,
+                "family_name": google_user.family_name,
+                "picture": google_user.picture,
+                "locale": google_user.locale,
+            }))));
+        }
     };
 
-    if !found {
-        return Err(not_found("customer.not.found", Some(json!({
-            "action": "create_customer_record",
-            "auth_provider": AuthProviders::GOOGLE,
-            "openid": google_user.id,
-            "email": google_user_email,
-            "verified_email": google_user.verified_email,
-            "name": google_user.name,
-            "given_name": google_user.given_name,
-            "family_name": google_user.family_name,
-            "picture": google_user.picture,
-            "locale": google_user.locale,
-        }))));
-    }
-
-    let customer = customer.unwrap();
     if customer.auth_provider != AuthProviders::GOOGLE {
         return Err(unauthorized("invalid.auth.provider", None));
     }

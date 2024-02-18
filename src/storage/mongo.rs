@@ -7,7 +7,7 @@ use serde_json::json;
 
 use std::env;
 
-use crate::types::{customer::{Customer, GenericResponse}, organization::Organization};
+use crate::{types::{customer::{Customer, GenericResponse}, organization::Organization}, utilities::helpers::{internal_server_error, not_found}};
 
 pub async fn init_connection() -> mongodb::error::Result<Client> {
     let uri = match env::var("MONGO_URI") {
@@ -61,23 +61,14 @@ pub async fn get_organizations_collection(db: &Database) -> Collection<Organizat
     return db.collection("organizations");
 }
 
-pub async fn find_customer(db: &Database, filter: Document) -> Result<(bool, Option<Customer>), (StatusCode, Json<GenericResponse>)> {
+pub async fn find_customer(db: &Database, filter: Document) -> Result<Customer, (StatusCode, Json<GenericResponse>)> {
     let collection = get_customers_collection(db).await;
     match collection.find_one(filter, None).await {
         Ok(customer) => match customer {
-            Some(customer) => Ok((true, Some(customer))),
-            None => Ok((false, None)),
+            Some(customer) => Ok(customer),
+            None => return Err(not_found("customer.not.found", None)),
         },
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: String::from("error fetching customer"),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            ));
-        },
+        Err(_) => return Err(not_found("customer.not.found", None)),
     }
 }
 
@@ -117,16 +108,14 @@ pub async fn update_customer(db: &Database, filter: Document, update: Document) 
     let collection = get_customers_collection(db).await;
     match collection.update_one(filter, update, None).await {
         Ok(_) => Ok(()),
-        Err(err) => {
-            log::error!("error updating customer: {}", err);
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: String::from("error updating record in database"),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            ));
-        }
+        Err(_) => return Err(internal_server_error("database.error", None)),
+    }
+}
+
+pub async fn update_organization(db: &Database, filter: Document, update: Document) -> Result<(), (StatusCode, Json<GenericResponse>)> {
+    let collection = get_organizations_collection(db).await;
+    match collection.update_one(filter, update, None).await {
+        Ok(_) => Ok(()),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     }
 }

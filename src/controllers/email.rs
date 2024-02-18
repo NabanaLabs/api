@@ -5,7 +5,7 @@ use chrono::Utc;
 use mongodb::bson::doc;
 use redis::{Commands, RedisError};
 
-use crate::{email::brevo_api::send_verification_email, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}, state::AppState}, utilities::helpers::{bad_request, internal_server_error, not_found, ok, payload_analyzer, random_string, unauthorized, valid_email}};
+use crate::{email::brevo_api::send_verification_email, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}, state::AppState}, utilities::helpers::{bad_request, internal_server_error, ok, payload_analyzer, random_string, unauthorized, valid_email}};
 
 use super::identity::{get_user_session_from_req, SessionScopes};
 
@@ -14,15 +14,12 @@ pub async fn add_email(
     payload_result: Result<Json<CustomerAddEmail>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
+    let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
         Err(_) => return Err(unauthorized("", None)),
     };
 
-    if !(session_data.scopes.contains(&SessionScopes::TotalAccess)
-        && session_data
-            .scopes
-            .contains(&SessionScopes::UpdateEmailAddresses))
+    if !(session_data.scopes.contains(&SessionScopes::TotalAccess) && session_data.scopes.contains(&SessionScopes::UpdateEmailAddresses))
     {
         return Err(unauthorized("", None));
     }
@@ -30,16 +27,7 @@ pub async fn add_email(
     let payload = payload_analyzer(payload_result)?;
 
     let filter = build_customer_filter(session_data.customer_id.as_str(), "").await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
-
-    if !found {
-        return Err(not_found("customer.not.found", None));
-    };
-
-    let customer = customer.unwrap();
+    let customer = find_customer(&state.mongo_db, filter).await?;
 
     let mut emails = customer.emails;
     if emails.len() >= 5 {
@@ -59,17 +47,17 @@ pub async fn add_email(
     }
 
     let filter = build_customer_filter("", email.as_str()).await;
-    let (found, customer_with_current_email) = match find_customer(&state.mongo_db, filter).await {
-        Ok(customer) => customer,
-        Err(_) => return Err(internal_server_error("database.error", None)),
-    };
+    let customer_against = find_customer(&state.mongo_db, filter).await;
 
-    if found {
-        if customer_with_current_email.unwrap().id != customer.id {
-            return Err(bad_request("email.already.registered", None));
-        }
-
-        return Err(bad_request("email.already.registered.by.you", None));
+    match customer_against {
+        Ok(customer_against) => {
+            if customer_against.id != customer.id {
+                return Err(bad_request("email.already.registered", None));
+            }
+    
+            return Err(bad_request("email.already.registered.by.you", None));
+        },
+        Err(_) => (),
     }
 
     emails.push(Email {

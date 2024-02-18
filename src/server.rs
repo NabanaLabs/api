@@ -1,6 +1,6 @@
 use crate::{
     routers::{
-        customers::get_customers_router, identity::get_identity_router, core::get_core_router, webhooks::get_webhooks_router
+        core::get_core_router, customers::get_customers_router, identity::get_identity_router, org::get_org_router, webhooks::get_webhooks_router
     }, types::{lemonsqueezy::Products, state::{AppState, EmailProviderSettings, GoogleAuth, MasterEmailEntity}}, utilities::helpers::fallback
 };
 use axum::{
@@ -27,6 +27,8 @@ use log::info;
 pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, postgres_conn: Option<Pool<ConnectionManager<PgConnection>>>) {
     let app_state = set_app_state(mongodb_client, redis_connection, postgres_conn).await;
 
+    // /api/org
+    let org = get_org_router(app_state.clone()).await;
     // /api/customers
     let customers = get_customers_router(app_state.clone()).await;
     info!("Customers router loaded");
@@ -41,6 +43,7 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
     info!("Core router loaded");
     // /api
     let api = Router::new()
+        .nest("/org", org)
         .nest("/customers", customers)
         .nest("/identity", identity)
         .nest("/webhooks", webhooks)

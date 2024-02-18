@@ -1,3 +1,4 @@
+use mongodb::bson::{doc, Bson};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7,6 +8,17 @@ pub struct Category {
     pub model_id: String,
 }
 
+impl Into<Bson> for Category {
+    fn into(self) -> Bson {
+        doc! {
+            "label": self.label,
+            "description": self.description,
+            "model_id": self.model_id,
+        }
+        .into()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sentence {
     pub text: String,
@@ -14,6 +26,19 @@ pub struct Sentence {
     pub use_cosine_similarity: bool,
     pub cosine_similarity_temperature: f32,
     pub model_id: String,
+}
+
+impl Into<Bson> for Sentence {
+    fn into(self) -> Bson {
+        doc! {
+            "text": self.text,
+            "exact": self.exact,
+            "use_cosine_similarity": self.use_cosine_similarity,
+            "cosine_similarity_temperature": self.cosine_similarity_temperature,
+            "model_id": self.model_id,
+        }
+        .into() // Convert the document into a Bson value
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,4 +81,26 @@ pub struct Router {
     // }]
     pub use_sentence_matching: bool,
     pub sentences: Vec<Sentence>,
+}
+
+impl Into<Bson> for Router {
+    fn into(self) -> Bson {
+        // Convert your Router struct into a BSON document
+        doc! {
+            "id": self.id,
+            "name": self.name,
+            "description": self.description,
+            "active": self.active,
+            "deleted": self.deleted,
+            "max_prompt_length": self.max_prompt_length,
+            "use_single_model": self.use_single_model,
+            "model_id": self.model_id,
+            "use_prompt_calification_model": self.use_prompt_calification_model,
+            "prompt_calification_model_version": self.prompt_calification_model_version,
+            "prompt_calification_model_categories": self.prompt_calification_model_categories,
+            "use_sentence_matching": self.use_sentence_matching,
+            "sentences": self.sentences,
+        }
+        .into() // Convert the document into a Bson value
+    }
 }
