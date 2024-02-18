@@ -20,16 +20,7 @@ pub fn payload_analyzer<T>(
 ) -> Result<Json<T>, (StatusCode, Json<GenericResponse>)> {
     let payload = match payload_result {
         Ok(payload) => payload,
-        Err(err) => {
-            let message = format!("invalid.payload: {}", err);
-            let json = Json(GenericResponse {
-                message,
-                data: json!({}),
-                exit_code: 1,
-            });
-
-            return Err(bad_request("invalid.payload", None));
-        }
+        Err(_) => return Err(bad_request("invalid.payload", None))
     };
 
     Ok(payload)
@@ -275,7 +266,7 @@ pub fn unauthorized(message: &str, data: Option<Value>) -> (StatusCode, Json<Gen
     (
         StatusCode::UNAUTHORIZED,
         Json(GenericResponse {
-            message: "unauthorized".to_string(),
+            message: message.to_string(),
             data,
             exit_code: 1,
         }),
@@ -296,7 +287,7 @@ pub fn forbidden(message: &str, data: Option<Value>) -> (StatusCode, Json<Generi
     (
         StatusCode::FORBIDDEN,
         Json(GenericResponse {
-            message: "forbidden".to_string(),
+            message: message.to_string(),
             data,
             exit_code: 1,
         }),

@@ -202,7 +202,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_created(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return response,
             }
         }
         "subscription_updated" => {

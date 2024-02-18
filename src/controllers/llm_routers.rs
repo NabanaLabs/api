@@ -171,19 +171,7 @@ pub async fn process_prompt(
                     prompt: prompt.to_string(),
                     prompt_size: prompt.len().try_into().unwrap(),
                 };
-
-                let data = ProccesedPrompt {
-                    single_model: None,
-                    prompt_calification: Some(PromptClassification {
-                        used: true,
-                        label: Some(label_text.to_string()),
-                        precision: Some(score),
-                        model: Some(selected_model_object.clone()),
-                    }),
-                    sentence_matching: None,
-                    prompt: prompt.to_string(),
-                    prompt_size: prompt.len().try_into().unwrap(),
-                }; 
+                
                 return Ok(ok("ok", Some(serde_json::to_value(data).unwrap())));
             }
 
