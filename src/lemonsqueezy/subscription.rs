@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use axum::{http::StatusCode, Json};
 use mongodb::bson::{doc, to_bson, Bson};
-use serde_json::json;
 
 use crate::{
     storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{
@@ -92,27 +91,14 @@ pub async fn subscription_created(
 pub async fn subscription_updated(
     event: SubscriptionEvent,
     state: Arc<AppState>,
-) -> Result<(), Json<GenericResponse>> {
+) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
 
-    let (found, customer) = match find_customer(&state.mongo_db, filter.clone()).await {
-        Ok(customer) => customer,
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error checking customer existence"),
-                data: json!({}),
-                exit_code: 1,
-            }));
-        }
-    };
+    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
 
     if !found {
-        return Err(Json(GenericResponse {
-            message: String::from("invalid customer_id: not records"),
-            data: json!({}),
-            exit_code: 1,
-        }));
+        return Err(bad_request("customer.not.found", None));
     }
 
     let customer = customer.unwrap();
@@ -130,43 +116,22 @@ pub async fn subscription_updated(
         },
     };
 
-    match update_customer(&state.mongo_db, filter, update).await {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error updating customer subscription"),
-                data: json!({}),
-                exit_code: 1,
-            }))
-        }
-    }
+    update_customer(&state.mongo_db, filter, update).await?;
+    Ok(())
 }
 
 // ready
 pub async fn subscription_update_status(
     event: SubscriptionEvent,
     state: Arc<AppState>,
-) -> Result<(), Json<GenericResponse>> {
+) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
 
-    let (found, customer) = match find_customer(&state.mongo_db, filter.clone()).await {
-        Ok(customer) => customer,
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error checking customer existence"),
-                data: json!({}),
-                exit_code: 1,
-            }));
-        }
-    };
+    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
 
     if !found {
-        return Err(Json(GenericResponse {
-            message: String::from("invalid customer_id: not records"),
-            data: json!({}),
-            exit_code: 1,
-        }));
+        return Err(bad_request("customer.not.found", None));
     }
 
     let customer = customer.unwrap();
@@ -183,41 +148,20 @@ pub async fn subscription_update_status(
         },
     };
 
-    match update_customer(&state.mongo_db, filter, update).await {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error updating customer subscription"),
-                data: json!({}),
-                exit_code: 1,
-            }))
-        }
-    }
+    update_customer(&state.mongo_db, filter, update).await?;
+    Ok(())
 }
 
 pub async fn subscription_update_history_logs(
     event: SubscriptionEvent,
     state: Arc<AppState>,
-) -> Result<(), Json<GenericResponse>> {
+) -> Result<(), (StatusCode, Json<GenericResponse>)> {
     let customer_id = event.meta.custom_data.unwrap().customer_id;
     let filter = build_customer_filter(customer_id.as_str(), event.data.attributes.user_email.as_str()).await;
-    let (found, customer) = match find_customer(&state.mongo_db, filter.clone()).await {
-        Ok(customer) => customer,
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error checking customer existence"),
-                data: json!({}),
-                exit_code: 1,
-            }));
-        }
-    };
+    let (found, customer) = find_customer(&state.mongo_db, filter.clone()).await?;
 
     if !found {
-        return Err(Json(GenericResponse {
-            message: String::from("invalid customer_id: not records"),
-            data: json!({}),
-            exit_code: 1,
-        }));
+        return Err(bad_request("customer.not.found", None));
     }
 
     let customer = customer.unwrap();
@@ -233,14 +177,6 @@ pub async fn subscription_update_history_logs(
         },
     };
 
-    match update_customer(&state.mongo_db, filter, update).await {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            return Err(Json(GenericResponse {
-                message: String::from("error updating customer subscription"),
-                data: json!({}),
-                exit_code: 1,
-            }))
-        }
-    }
+    update_customer(&state.mongo_db, filter, update).await?;
+    Ok(())
 }

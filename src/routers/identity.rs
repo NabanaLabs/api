@@ -49,6 +49,6 @@ pub async fn get_identity_router(app_state: Arc<AppState>) -> Router<Arc<AppStat
                     )
                 }))
                 .layer(BufferLayer::new(256))
-                .layer(RateLimitLayer::new(30, Duration::from_secs(60))),
+                .layer(RateLimitLayer::new(15, Duration::from_secs(60))),
         );
 }

@@ -2,7 +2,7 @@ use crate::{
     lemonsqueezy::subscription::{
         subscription_created, subscription_update_history_logs, subscription_update_status,
         subscription_updated,
-    }, types::{customer::GenericResponse, lemonsqueezy::{OrderEvent, SubscriptionEvent}, state::AppState}, utilities::helpers::payload_analyzer
+    }, types::{customer::GenericResponse, lemonsqueezy::{OrderEvent, SubscriptionEvent}, state::AppState}, utilities::helpers::{bad_request, ok, payload_analyzer}
 };
 
 use axum::{extract::rejection::JsonRejection, http::HeaderMap, http::StatusCode, Json};
@@ -150,11 +150,8 @@ pub async fn subscription_webhook_events_listener(
     _headers: HeaderMap,
     payload_result: Result<Json<SubscriptionEvent>, JsonRejection>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
-    let payload = match payload_analyzer(payload_result) {
-        Ok(payload) => payload,
-        Err((status_code, json)) => return (status_code, json),
-    };
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let payload = payload_analyzer(payload_result)?;
 
     //let (verified, error_response) = signature_verification(headers, payload.clone(), state.clone()).await;
 
@@ -166,14 +163,7 @@ pub async fn subscription_webhook_events_listener(
     let custom_data = match &payload.meta.custom_data {
         Some(custom_data) => custom_data,
         None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: String::from("not custom_data"),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            );
+            return Err(bad_request("missing.custom_data", None));
         }
     };
 
@@ -181,19 +171,8 @@ pub async fn subscription_webhook_events_listener(
 
     let customer_id = custom_data.customer_id.clone();
     if customer_id.len() > 100 || customer_id.len() < 1 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: String::from("missing customer_id"),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.customer_id", None));
     }
-
-    trace!("EVENT NAME: {:?}", payload.meta.event_name);
-    trace!("CUSTOMER ID: {:?}", customer_id);
-    trace!("CUSTOMER EMAIL: {:?}", payload.data.attributes.user_email);
 
     let event_name = payload.meta.event_name.clone();
     match event_name.as_str() {
@@ -202,7 +181,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_created(payload.0, state).await {
                 Ok(_) => (),
-                Err(response) => return response,
+                Err(response) => return Err(response),
             }
         }
         "subscription_updated" => {
@@ -210,7 +189,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_updated(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_cancelled" => {
@@ -218,7 +197,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_status(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_resumed" => {
@@ -226,7 +205,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_status(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_expired" => {
@@ -234,7 +213,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_status(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_paused" => {
@@ -242,7 +221,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_status(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_unpaused" => {
@@ -250,7 +229,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_status(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_payment_success" => {
@@ -258,7 +237,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_history_logs(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_payment_failed" => {
@@ -266,7 +245,7 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_history_logs(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         "subscription_payment_recovered" => {
@@ -274,18 +253,11 @@ pub async fn subscription_webhook_events_listener(
             let payload = payload.clone();
             match subscription_update_history_logs(payload.0, state).await {
                 Ok(_) => (),
-                Err(json) => return (StatusCode::BAD_REQUEST, json),
+                Err(response) => return Err(response),
             }
         }
         _ => {}
     }
 
-    return (
-        StatusCode::OK,
-        Json(GenericResponse {
-            message: String::from("captured"),
-            data: json!({}),
-            exit_code: 0,
-        }),
-    );
+    Ok(ok("captured", None))
 }

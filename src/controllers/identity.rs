@@ -85,21 +85,11 @@ pub async fn get_user_session_from_req(
     headers: HeaderMap,
     redis_connection: &Client,
 ) -> Result<SessionData, (StatusCode, Json<GenericResponse>)> {
-    let token_string = extract_token_from_headers(&headers).await?;
-    match validate_token(token_string) {
-        Ok(_) => (),
-        Err(_) => return Err(unauthorized("", None)),
-    };
+    let token_string = extract_token_from_headers(&headers)?;
+    validate_token(token_string)?;
 
-    let customer_id = match get_session_from_redis(redis_connection, &token_string).await {
-        Ok(token) => token,
-        Err(_) => return Err(unauthorized("invalid.token", None)),
-    };
-    
-    let token_data = match get_token_payload(&token_string) {
-        Ok(token_data) => token_data,
-        Err(_) => return Err(unauthorized("invalid.token", None)),
-    };
+    let customer_id = get_session_from_redis(redis_connection, &token_string).await?;
+    let token_data = get_token_payload(&token_string)?;
 
     if customer_id != token_data.claims.sub {
         return Err(bad_request("invalid.token", None));
@@ -139,10 +129,7 @@ pub async fn renew_session(
     headers: HeaderMap,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let token_string = match extract_token_from_headers(&headers).await {
-        Ok(token_string) => token_string,
-        Err(_) => return Err(unauthorized("", None)),
-    };
+    let token_string = extract_token_from_headers(&headers)?;
 
     let mut redis_conn = match state.redis_connection.get_connection() {
         Ok(redis_conn) => redis_conn,

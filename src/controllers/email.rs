@@ -27,10 +27,7 @@ pub async fn add_email(
         return Err(unauthorized("", None));
     }
 
-    let payload = match payload_analyzer(payload_result) {
-        Ok(payload) => payload,
-        Err(_) => return Err(bad_request("invalid.payload", None)),
-    };
+    let payload = payload_analyzer(payload_result)?;
 
     let filter = build_customer_filter(session_data.customer_id.as_str(), "").await;
     let (found, customer) = match find_customer(&state.mongo_db, filter).await {

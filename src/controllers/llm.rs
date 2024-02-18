@@ -7,12 +7,11 @@ use crate::{
         incoming_requests::ProcessPrompt,
         llm_router::Category,
         llms::LLMs,
-        openai_models::OpenAIModels,
         organization::{AccessTokenScopes, ModelObject},
         state::AppState,
     },
     utilities::helpers::{
-        bad_request, detect_similar_sentences, internal_server_error, ok, payload_analyzer,
+        bad_request, detect_similar_sentences, ok, payload_analyzer,
         unauthorized,
     },
 };

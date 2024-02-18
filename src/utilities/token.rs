@@ -77,12 +77,12 @@ pub fn create_token(id: &String, scopes: Vec<SessionScopes>) -> Result<std::stri
     }
 }
 
-pub fn get_token_payload(token: &str) -> Result<TokenData<Claims>, String> {
+pub fn get_token_payload(token: &str) -> Result<TokenData<Claims>, (StatusCode, Json<GenericResponse>)> {
     let validation = Validation::new(Algorithm::HS512);
 
     let signing_key = match env::var("API_TOKENS_SIGNING_KEY") {
         Ok(key) => key,
-        Err(_) => return Err(APIMessages::Token(TokenMessages::ErrorValidating).to_string()),
+        Err(_) => return Err(bad_request("token.signing_key", None)),
     };
 
     let token_data = match decode::<Claims>(
@@ -91,19 +91,19 @@ pub fn get_token_payload(token: &str) -> Result<TokenData<Claims>, String> {
         &validation,
     ) {
         Ok(t) => t,
-        Err(_) => return Err(APIMessages::Token(TokenMessages::ErrorValidating).to_string()),
+        Err(_) => return Err(unauthorized("token.invalid", None)),
     };
 
     Ok(token_data)
 }
 
-pub fn validate_token(token: &str) -> Result<TokenData<Claims>, String> {
+pub fn validate_token(token: &str) -> Result<TokenData<Claims>, (StatusCode, Json<GenericResponse>)> {
     let token_data = get_token_payload(token)?;
 
     let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
 
     if now.as_secs() > token_data.claims.exp as u64 {
-        return Err(APIMessages::Token(TokenMessages::Expired).to_string());
+        return Err(unauthorized("token.expired", None));
     }
 
     Ok(token_data)
@@ -117,18 +117,11 @@ pub async fn get_session_from_redis(
 
     match result {
         Ok(id) => Ok(id),
-        Err(_) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(GenericResponse {
-                message: APIMessages::Redis(RedisMessages::ErrorFetching).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        )),
+        Err(_) => return Err(internal_server_error("invalid.token", None)),
     }
 }
 
-pub async fn extract_token_from_headers(headers: &HeaderMap) -> Result<&str, (StatusCode, Json<GenericResponse>)> {
+pub fn extract_token_from_headers(headers: &HeaderMap) -> Result<&str, (StatusCode, Json<GenericResponse>)> {
     match headers.get("Authorization") {
         Some(token) => match token.to_str() {
             Ok(token) => Ok(token),

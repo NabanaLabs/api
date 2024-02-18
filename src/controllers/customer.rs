@@ -30,10 +30,7 @@ pub async fn create_customer_record(
     payload_result: Result<Json<CreateCustomerRecord>, JsonRejection>,
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
-    let payload = match payload_analyzer(payload_result) {
-        Ok(payload) => payload,
-        Err(_) => return Err(bad_request("invalid.payload", None)),
-    };
+    let payload = payload_analyzer(payload_result)?;
 
     if !payload.accepted_terms {
         return Err(bad_request("terms.not.accepted", None));
@@ -276,10 +273,7 @@ pub async fn update_name(
         return Err(unauthorized("not.enough.scope", None));
     }
 
-    let payload = match payload_analyzer(payload_result) {
-        Ok(payload) => payload,
-        Err(_) => return Err(bad_request("invalid.payload", None)),
-    };
+    let payload = payload_analyzer(payload_result)?;
 
     if payload.name.len() < 2 || payload.name.len() > 25 {
         return Err(bad_request("invalid.name.length", None));
@@ -327,10 +321,7 @@ pub async fn update_password(
         return Err(not_found("customer.not.found", None));
     }
 
-    let payload = match payload_analyzer(payload_result) {
-        Ok(payload) => payload,
-        Err(_) => return Err(bad_request("invalid.payload", None)),
-    };
+    let payload = payload_analyzer(payload_result)?;
 
     if payload.old_password.len() < 8 || payload.old_password.len() > 100 {
         return Err(bad_request("invalid.old.password.length", None));
