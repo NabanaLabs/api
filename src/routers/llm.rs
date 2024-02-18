@@ -1,16 +1,25 @@
+use axum::routing::get;
 use axum::BoxError;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
 use axum::{Router, routing::post};
-use crate::controllers::llm_routers::process_prompt;
+use crate::controllers::llm::{get_models_list, process_prompt};
 use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
 use tower::{buffer::BufferLayer, limit::RateLimitLayer, ServiceBuilder};
 
-// /api/llm/routers
+// /api/core
 pub async fn get_llm_routers_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     return Router::new()
+        .route(
+            // suggest and model and cache it
+            // if cache is not empty, return the cached response
+            "/get/models",
+            get({
+                move || get_models_list()
+            }),
+        )
         .route(
             // suggest and model and cache it
             // if cache is not empty, return the cached response

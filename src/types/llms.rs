@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use super::{anthropic_models::AnthropicModels, coherence_models::CoherenceModels, openai_models::OpenAIModels};
 
+#[derive(Debug, Serialize)]
+pub struct ModelInfo {
+    model: String,
+    context_window: usize,
+    training_data: &'static str,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum LLMs {
     None,
@@ -39,6 +46,128 @@ impl LLMs {
             LLMs::CoherenceModels(CoherenceModels::Command) => String::from("command"),
             LLMs::CoherenceModels(CoherenceModels::CommandNightly) => String::from("command-nightly"),
         }
+    }
+
+    pub fn coherence_models_info() -> Vec<ModelInfo> {
+        return vec![
+            ModelInfo {
+                model: LLMs::CoherenceModels(CoherenceModels::CommandLight).to_string(),
+                context_window: CoherenceModels::CommandLight.context_window(),
+                training_data: CoherenceModels::CommandLight.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::CoherenceModels(CoherenceModels::CommandLightNightly).to_string(),
+                context_window: CoherenceModels::CommandLightNightly.context_window(),
+                training_data: CoherenceModels::CommandLightNightly.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::CoherenceModels(CoherenceModels::Command).to_string(),
+                context_window: CoherenceModels::Command.context_window(),
+                training_data: CoherenceModels::Command.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::CoherenceModels(CoherenceModels::CommandNightly).to_string(),
+                context_window: CoherenceModels::CommandNightly.context_window(),
+                training_data: CoherenceModels::CommandNightly.training_data(),
+            },
+        ];
+    }
+
+    pub fn anthropic_models_info() -> Vec<ModelInfo> {
+        return vec![
+            ModelInfo {
+                model: LLMs::AnthropicModels(AnthropicModels::ClaudeInstant).to_string(),
+                context_window: AnthropicModels::ClaudeInstant.context_window(),
+                training_data: AnthropicModels::ClaudeInstant.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::AnthropicModels(AnthropicModels::Claude2).to_string(),
+                context_window: AnthropicModels::Claude2.context_window(),
+                training_data: AnthropicModels::Claude2.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::AnthropicModels(AnthropicModels::Claude2_1).to_string(),
+                context_window: AnthropicModels::Claude2_1.context_window(),
+                training_data: AnthropicModels::Claude2_1.training_data(),
+            },
+        ];
+    }
+
+    pub fn openai_models_info() -> Vec<ModelInfo> {
+        return vec![
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT4).to_string(),
+                context_window: OpenAIModels::GPT4.context_window(),
+                training_data: OpenAIModels::GPT4.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT4Turbo).to_string(),
+                context_window: OpenAIModels::GPT4Turbo.context_window(),
+                training_data: OpenAIModels::GPT4Turbo.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT4_1106).to_string(),
+                context_window: OpenAIModels::GPT4_1106.context_window(),
+                training_data: OpenAIModels::GPT4_1106.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT4Vision).to_string(),
+                context_window: OpenAIModels::GPT4Vision.context_window(),
+                training_data: OpenAIModels::GPT4Vision.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo0125).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo0125.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo0125.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo1106).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo1106.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo1106.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5TurboInstruct).to_string(),
+                context_window: OpenAIModels::GPT3_5TurboInstruct.context_window(),
+                training_data: OpenAIModels::GPT3_5TurboInstruct.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo16k).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo16k.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo16k.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo0613).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo0613.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo0613.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::GPT3_5Turbo16k0613).to_string(),
+                context_window: OpenAIModels::GPT3_5Turbo16k0613.context_window(),
+                training_data: OpenAIModels::GPT3_5Turbo16k0613.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::Babbage002).to_string(),
+                context_window: OpenAIModels::Babbage002.context_window(),
+                training_data: OpenAIModels::Babbage002.training_data(),
+            },
+            ModelInfo {
+                model: LLMs::OpenAIModels(OpenAIModels::Davinci002).to_string(),
+                context_window: OpenAIModels::Davinci002.context_window(),
+                training_data: OpenAIModels::Davinci002.training_data(),
+            },
+        ];
+    }
+
+    pub fn all_models_info() -> Vec<ModelInfo> {
+        let mut all_models_info = LLMs::openai_models_info();
+        all_models_info.extend(LLMs::anthropic_models_info());
+        all_models_info.extend(LLMs::coherence_models_info());
+        return all_models_info;
     }
 }
 

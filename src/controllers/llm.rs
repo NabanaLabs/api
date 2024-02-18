@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     storage::mongo::{build_organizations_filter, find_organization},
     types::{
-        customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category,
-        organization::ModelObject, state::AppState,
+        customer::GenericResponse, incoming_requests::ProcessPrompt, llm_router::Category, llms::LLMs, openai_models::OpenAIModels, organization::ModelObject, state::AppState
     },
     utilities::helpers::{bad_request, detect_similar_sentences, ok, payload_analyzer},
 };
@@ -272,4 +271,9 @@ pub async fn process_prompt(
     }
 
     return Err(bad_request("prompt.calification.error", None));
+}
+
+pub async fn get_models_list() -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let data = LLMs::all_models_info();
+    Ok(ok("ok", Some(serde_json::to_value(data).unwrap())))
 }

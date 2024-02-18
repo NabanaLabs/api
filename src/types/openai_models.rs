@@ -27,7 +27,7 @@ pub enum OpenAIModels {
 }
 
 impl OpenAIModels {
-    const fn context_window(&self) -> usize {
+    pub const fn context_window(&self) -> usize {
         match *self {
             OpenAIModels::GPT4 | OpenAIModels::GPT4Turbo | OpenAIModels::GPT4_1106 | OpenAIModels::GPT4Vision => 128000,
             OpenAIModels::GPT3_5Turbo0125 | OpenAIModels::GPT3_5Turbo | OpenAIModels::GPT3_5Turbo1106 | OpenAIModels::GPT3_5TurboInstruct | OpenAIModels::GPT3_5Turbo16k | OpenAIModels::GPT3_5Turbo0613 | OpenAIModels::GPT3_5Turbo16k0613 => 16385,
@@ -35,7 +35,7 @@ impl OpenAIModels {
         }
     }
 
-    const fn training_data(&self) -> &'static str {
+    pub const fn training_data(&self) -> &'static str {
         match *self {
             OpenAIModels::GPT4 | OpenAIModels::GPT4Turbo | OpenAIModels::GPT4_1106 | OpenAIModels::GPT4Vision => "Up to Apr 2023",
             OpenAIModels::GPT3_5Turbo0125 | OpenAIModels::GPT3_5Turbo | OpenAIModels::GPT3_5Turbo1106 | OpenAIModels::GPT3_5TurboInstruct | OpenAIModels::GPT3_5Turbo16k | OpenAIModels::GPT3_5Turbo0613 | OpenAIModels::GPT3_5Turbo16k0613 => "Up to Sep 2021",

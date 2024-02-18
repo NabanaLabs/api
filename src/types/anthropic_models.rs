@@ -13,7 +13,7 @@ pub enum AnthropicModels {
 
 // Constants providing additional details about each Anthropic model
 impl AnthropicModels {
-    const fn context_window(&self) -> usize {
+    pub const fn context_window(&self) -> usize {
         match *self {
             AnthropicModels::ClaudeInstant => 100000,
             AnthropicModels::Claude2 => 100000,
@@ -21,7 +21,7 @@ impl AnthropicModels {
         }
     }
 
-    const fn training_data(&self) -> &'static str {
+    pub const fn training_data(&self) -> &'static str {
         "Up to Dec 2022"
     }
 }
