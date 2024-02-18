@@ -13,7 +13,7 @@ use crate::utilities::api_messages::{
     TokenMessages,
 };
 use crate::utilities::helpers::{
-    parse_class, payload_analyzer, random_string, valid_email, valid_password,
+    bad_request, internal_server_error, not_found, ok, parse_class, payload_analyzer, random_string, unauthorized, valid_email, valid_password
 };
 use crate::types::customer::GenericResponse;
 
@@ -33,21 +33,14 @@ use super::identity::{get_user_session_from_req, SessionScopes};
 pub async fn create_customer_record(
     payload_result: Result<Json<CreateCustomerRecord>, JsonRejection>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let payload = match payload_analyzer(payload_result) {
         Ok(payload) => payload,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.payload", None)),
     };
 
     if !payload.accepted_terms {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::NotAcceptedTerms).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("terms.not.accepted", None));
     }
 
     let auth_provider: AuthProviders;
@@ -58,85 +51,43 @@ pub async fn create_customer_record(
     }
 
     if payload.name.len() < 2 || payload.name.len() > 25 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(InputMessages::InvalidNameLength).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.name.length", None));
     }
 
     match valid_email(&payload.email).await {
         Ok(_) => (),
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.email", None)),
     };
 
     let mut hashed_password = "".to_string();
     if auth_provider == AuthProviders::LEGACY {
         match valid_password(&payload.password).await {
             Ok(_) => (),
-            Err((status_code, json)) => return (status_code, json),
+            Err(_) => return Err(bad_request("invalid.password", None))
         };
 
         if payload.password != payload.password_confirmation {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Customer(
-                        CustomerMessages::PasswordConfirmationDoesNotMatch,
-                    )
-                    .to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            );
+            return Err(bad_request("invalid.password", None));
         }
 
         if payload.email.to_lowercase() == payload.password.to_lowercase() {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Email(EmailMessages::EmailAndPasswordMustBeDifferent)
-                        .to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            );
+            return Err(bad_request("invalid.password", None));
         }
 
         hashed_password = match hash(&payload.password, DEFAULT_COST) {
             Ok(hashed_password) => hashed_password,
-            Err(_) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(GenericResponse {
-                        message: APIMessages::Customer(CustomerMessages::ErrorHashingPassword)
-                            .to_string(),
-                        data: json!({}),
-                        exit_code: 1,
-                    }),
-                )
-            }
+            Err(_) => return Err(internal_server_error("error.hashing.password", None)),
         };
     }
 
     let filter = build_customer_filter("", payload.email.to_lowercase().as_str()).await;
     let (found, _) = match find_customer(&state.mongo_db, filter).await {
         Ok(customer) => customer,
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     if found {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Email(EmailMessages::Taken).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("email.already.registered", None));
     }
 
     let emails = vec![Email {
@@ -147,7 +98,7 @@ pub async fn create_customer_record(
 
     let class = match parse_class(&payload.class).await {
         Ok(class) => class,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.class", None)),
     };
 
     let current_datetime = Utc::now();
@@ -192,6 +143,12 @@ pub async fn create_customer_record(
         related_orgs: vec![],
     };
 
+    let collection = state.mongo_db.collection("customers");
+    match collection.insert_one(customer.clone(), None).await {
+        Ok(_) => (),
+        Err(_) => return Err(internal_server_error("database.error", None)),
+    }
+
     let created_customer_list = std::env::var("BREVO_CUSTOMERS_LIST_ID");
     let api_key = std::env::var("BREVO_CUSTOMERS_WEBFLOW_API_KEY");
 
@@ -211,19 +168,7 @@ pub async fn create_customer_record(
         .await
         {
             Ok(_) => (),
-            Err(_) => {
-                return (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(GenericResponse {
-                        message: APIMessages::Customer(
-                            CustomerMessages::ErrorRegisteringCustomerInMarketingPlatform,
-                        )
-                        .to_string(),
-                        data: json!({}),
-                        exit_code: 1,
-                    }),
-                )
-            }
+            Err(_) => return Err(internal_server_error("error.sending.email", None)),
         };
 
         if state.enabled_email_integration {
@@ -234,75 +179,37 @@ pub async fn create_customer_record(
                 customer.name.clone(),
             ).await {
                 Ok(_) => (),
-                Err((status, json)) => return (status, json),
+                Err(_) => return Err(internal_server_error("error.sending.email", None)),
             }
         }
     }
 
-    let collection = state.mongo_db.collection("customers");
-    match collection.insert_one(customer.clone(), None).await {
-        Ok(_) => (),
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Mongo(MongoMessages::ErrorInserting).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
-    }
-
-    (
-        StatusCode::CREATED,
-        Json(GenericResponse {
-            message: APIMessages::Customer(CustomerMessages::Created).to_string(),
-            data: json!(customer),
-            exit_code: 0,
-        }),
-    )
+    Ok(ok("customer.created", None))
 }
 
 pub async fn fetch_customer_record_by_id(
     headers: HeaderMap,
     Query(params): Query<FetchCustomerByID>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(unauthorized("invalid.token", None)),
     };
 
     let customer_id = match params.id {
         Some(id) => id,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Customer(CustomerMessages::NotFoundByID).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        None => return Err(bad_request("invalid.id", None)),
     };
 
     let filter = build_customer_filter(customer_id.as_str(), "").await;
     let (found, customer) = match find_customer(&state.mongo_db, filter).await {
         Ok(customer) => customer,
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     if !found {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::NotFound).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(not_found("customer.not.found", None));
     }
 
     let customer = customer.unwrap();
@@ -321,14 +228,7 @@ pub async fn fetch_customer_record_by_id(
     };
 
     if session_data.scopes.contains(&SessionScopes::TotalAccess) {
-        return (
-            StatusCode::OK,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::Found).to_string(),
-                data: json!(shared_customer_data),
-                exit_code: 1,
-            }),
-        );
+        return Ok(ok("customer.found", Some(json!(shared_customer_data))));
     }
 
     if !session_data.scopes.contains(&SessionScopes::ViewPublicID) {
@@ -361,54 +261,32 @@ pub async fn fetch_customer_record_by_id(
         shared_customer_data.deleted = None;
     }
 
-    (
-        StatusCode::OK,
-        Json(GenericResponse {
-            message: APIMessages::Customer(CustomerMessages::Found).to_string(),
-            data: json!(shared_customer_data),
-            exit_code: 0,
-        }),
-    )
+    Ok(ok("customer.found", Some(json!(shared_customer_data))))
 }
 
 pub async fn update_name(
     headers: HeaderMap,
     payload_result: Result<Json<CustomerUpdateName>, JsonRejection>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(unauthorized("invalid.token", None)),
     };
 
     if !(session_data.scopes.contains(&SessionScopes::TotalAccess)
         && session_data.scopes.contains(&SessionScopes::UpdateName))
     {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(GenericResponse {
-                message: APIMessages::Token(TokenMessages::NotAllowedScopesToPerformAction)
-                    .to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(unauthorized("not.enough.scope", None));
     }
 
     let payload = match payload_analyzer(payload_result) {
         Ok(payload) => payload,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.payload", None)),
     };
 
     if payload.name.len() < 2 || payload.name.len() > 25 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(InputMessages::InvalidNameLength).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.name.length", None));
     }
 
     let current_datetime = Utc::now();
@@ -422,128 +300,66 @@ pub async fn update_name(
     };
 
     match update_customer(&state.mongo_db, filter, update).await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::NameUpdated).to_string(),
-                data: json!({}),
-                exit_code: 0,
-            }),
-        ),
-        Err((status, json)) => return (status, json),
+        Ok(_) => (),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     }
+
+    Ok(ok("customer.name.updated", None))
 }
 
 pub async fn update_password(
     headers: HeaderMap,
     payload_result: Result<Json<CustomerUpdatePassword>, JsonRejection>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(unauthorized("invalid.token", None)),
     };
 
     if !session_data.scopes.contains(&SessionScopes::TotalAccess) {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(GenericResponse {
-                message: APIMessages::Token(TokenMessages::NotAllowedScopesToPerformAction)
-                    .to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(unauthorized("not.enough.scope", None));
     }
 
     let filter = build_customer_filter(session_data.customer_id.as_str(), "").await;
     let (found, customer) = match find_customer(&state.mongo_db, filter).await {
         Ok(customer) => customer,
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     if !found {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::NotFound).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(not_found("customer.not.found", None));
     }
 
     let payload = match payload_analyzer(payload_result) {
         Ok(payload) => payload,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.payload", None)),
     };
 
     if payload.old_password.len() < 8 || payload.old_password.len() > 100 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(InputMessages::InvalidOldPasswordLength).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.old.password.length", None));
     }
 
     if payload.new_password.len() < 8 || payload.new_password.len() > 100 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(InputMessages::InvalidNewPasswordLength).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.new.password.length", None));
     }
 
     match valid_password(&payload.new_password).await {
         Ok(_) => (),
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.new.password", None)),
     };
 
     if payload.new_password == payload.old_password {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(
-                    InputMessages::NewPasswordAndOldPasswordMustBeDifferent,
-                )
-                .to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("new.password.must.differ", None));
     }
 
     if payload.new_password != payload.new_password_confirmation {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Input(InputMessages::NewPasswordConfirmationMustMatch)
-                    .to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("password.confirmation.must.match", None));
     }
 
     let hashed_new_password = match hash(&payload.new_password, DEFAULT_COST) {
         Ok(hashed_password) => hashed_password,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Customer(CustomerMessages::ErrorHashingPassword)
-                        .to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        Err(_) => return Err(internal_server_error("error.hashing.password", None)),
     };
 
     let customer = customer.unwrap();
@@ -551,28 +367,10 @@ pub async fn update_password(
     match verify(&payload.old_password, &customer.password) {
         Ok(is_valid) => {
             if !is_valid {
-                return (
-                    StatusCode::UNAUTHORIZED,
-                    Json(GenericResponse {
-                        message: APIMessages::Customer(CustomerMessages::IncorrectPassword)
-                            .to_string(),
-                        data: json!({}),
-                        exit_code: 1,
-                    }),
-                );
+                return Err(bad_request("invalid.old.password", None));
             }
         }
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Customer(CustomerMessages::ErrorVerifyingPassword)
-                        .to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        Err(_) => return Err(internal_server_error("error.verifying.password", None)),
     };
 
     let current_datetime = Utc::now();
@@ -586,14 +384,9 @@ pub async fn update_password(
     };
 
     match update_customer(&state.mongo_db, filter, update).await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::PasswordUpdated).to_string(),
-                data: json!({}),
-                exit_code: 0,
-            }),
-        ),
-        Err((status, json)) => return (status, json),
+        Ok(_) => (),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     }
+
+    Ok(ok("customer.password.updated", None))
 }

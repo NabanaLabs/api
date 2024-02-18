@@ -4,9 +4,8 @@ use axum::{extract::{rejection::JsonRejection, Query}, http::{HeaderMap, StatusC
 use chrono::Utc;
 use mongodb::bson::doc;
 use redis::{Commands, RedisError};
-use serde_json::json;
 
-use crate::{email::brevo_api::send_verification_email, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}, state::AppState}, utilities::{api_messages::{APIMessages, CustomerMessages, EmailMessages, RedisMessages, TokenMessages}, helpers::{payload_analyzer, random_string, valid_email}}};
+use crate::{email::brevo_api::send_verification_email, storage::mongo::{build_customer_filter, find_customer, update_customer}, types::{customer::{Email, GenericResponse}, email::SendEmailData, incoming_requests::{CustomerAddEmail, VerifyEmailQueryParams}, state::AppState}, utilities::helpers::{bad_request, internal_server_error, not_found, ok, payload_analyzer, random_string, unauthorized, valid_email}};
 
 use super::identity::{get_user_session_from_req, SessionScopes};
 
@@ -14,10 +13,10 @@ pub async fn add_email(
     headers: HeaderMap,
     payload_result: Result<Json<CustomerAddEmail>, JsonRejection>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(headers, &state.redis_connection).await {
         Ok(customer_id) => customer_id,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(unauthorized("", None)),
     };
 
     if !(session_data.scopes.contains(&SessionScopes::TotalAccess)
@@ -25,98 +24,55 @@ pub async fn add_email(
             .scopes
             .contains(&SessionScopes::UpdateEmailAddresses))
     {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(GenericResponse {
-                message: APIMessages::Token(TokenMessages::NotAllowedScopesToPerformAction)
-                    .to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(unauthorized("", None));
     }
 
     let payload = match payload_analyzer(payload_result) {
         Ok(payload) => payload,
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.payload", None)),
     };
 
     let filter = build_customer_filter(session_data.customer_id.as_str(), "").await;
     let (found, customer) = match find_customer(&state.mongo_db, filter).await {
         Ok(customer) => customer,
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     if !found {
-        return (
-            StatusCode::NOT_FOUND,
-            Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::NotFound).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(not_found("customer.not.found", None));
     };
 
     let customer = customer.unwrap();
 
     let mut emails = customer.emails;
     if emails.len() >= 5 {
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Email(EmailMessages::MaxEmailsReached).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("email.limit.reached", None));
     }
 
     let email = payload.email.to_lowercase();
     match valid_email(&email).await {
         Ok(_) => (),
-        Err((status_code, json)) => return (status_code, json),
+        Err(_) => return Err(bad_request("invalid.email", None)),
     };
 
     for registered_email in emails.iter() {
         if registered_email.address == email {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Email(EmailMessages::Taken).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            );
+            return Err(bad_request("email.already.registered", None));
         }
     }
 
     let filter = build_customer_filter("", email.as_str()).await;
     let (found, customer_with_current_email) = match find_customer(&state.mongo_db, filter).await {
         Ok(customer) => customer,
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     if found {
         if customer_with_current_email.unwrap().id != customer.id {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Email(EmailMessages::TakenByOtherCustomer).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            );
+            return Err(bad_request("email.already.registered", None));
         }
 
-        return (
-            StatusCode::BAD_REQUEST,
-            Json(GenericResponse {
-                message: APIMessages::Email(EmailMessages::TakenByYou).to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("email.already.registered.by.you", None));
     }
 
     emails.push(Email {
@@ -151,96 +107,44 @@ pub async fn add_email(
             let api_key = match std::env::var("BREVO_CUSTOMERS_WEBFLOW_API_KEY") {
                 Ok(api_key) => api_key,
                 Err(_) => {
-                    return (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(GenericResponse {
-                            message: APIMessages::Customer(
-                                CustomerMessages::ErrorRegisteringCustomerInMarketingPlatform,
-                            )
-                            .to_string(),
-                            data: json!({}),
-                            exit_code: 1,
-                        }),
-                    )
+                    return Err(internal_server_error("", None));
                 }
             };
             
-            match new_email_verification(
+            let _ = new_email_verification(
                 &state,
                 api_key,
                 email,
                 customer.name,
-            ).await {
-                Ok(_) => (),
-                Err((status, json)) => return (status, json),
-            }
-
-
-            (StatusCode::OK, Json(GenericResponse {
-                message: APIMessages::Customer(CustomerMessages::EmailAdded).to_string(),
-                data: json!({}),
-                exit_code: 0,
-            }))
+            ).await;
         },
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     }
+
+    return Ok(ok("email.added", None));
 }
 
 pub async fn verify_email(
     Query(params): Query<VerifyEmailQueryParams>,
     state: Arc<AppState>,
-) -> (StatusCode, Json<GenericResponse>) {
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let token = match params.token {
         Some(token) => token,
-        None => {
-            return (
-                StatusCode::BAD_REQUEST,
-                Json(GenericResponse {
-                    message: APIMessages::Token(TokenMessages::Missing).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        None => return Err(bad_request("invalid.token", None))
     };
 
     let mut redis_conn = match state.redis_connection.get_connection() {
         Ok(redis_conn) => redis_conn,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Redis(RedisMessages::FailedToConnect).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        Err(_) => return Err(internal_server_error("cache.error", None)),
     };
 
     let customer_email_address: String = match redis_conn.get(token.clone()) {
         Ok(customer_email_address) => customer_email_address,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Redis(RedisMessages::ErrorFetching).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        Err(_) => return Err(internal_server_error("cache.error", None)),
     };
 
     if customer_email_address.is_empty() {
-        return (
-            StatusCode::UNAUTHORIZED,
-            Json(GenericResponse {
-                message: APIMessages::Unauthorized.to_string(),
-                data: json!({}),
-                exit_code: 1,
-            }),
-        );
+        return Err(bad_request("invalid.token", None));
     }
 
     let filter = doc! {
@@ -255,32 +159,16 @@ pub async fn verify_email(
 
     match update_customer(&state.mongo_db, filter, update).await {
         Ok(_) => (),
-        Err((status, json)) => return (status, json),
+        Err(_) => return Err(internal_server_error("database.error", None)),
     };
 
     let result: Result<bool, RedisError> = redis_conn.del(token.clone());
     match result {
         Ok(_) => (),
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Redis(RedisMessages::ErrorDeleting).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            )
-        }
+        Err(_) => return Err(internal_server_error("cache.error", None)),
     };
 
-    (
-        StatusCode::OK,
-        Json(GenericResponse {
-            message: APIMessages::Email(EmailMessages::Verified).to_string(),
-            data: json!({}),
-            exit_code: 0,
-        }),
-    )
+    return Ok(ok("email.verified", None));
 }
 
 pub async fn new_email_verification(
@@ -292,16 +180,7 @@ pub async fn new_email_verification(
     let new_token = random_string(30).await;
     let mut redis_conn = match state.redis_connection.get_connection() {
         Ok(redis_conn) => redis_conn,
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Redis(RedisMessages::FailedToConnect).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            ))
-        }
+        Err(_) => return Err(internal_server_error("cache.error", None)),
     };
 
     let result: Result<bool, RedisError> = redis_conn.set_ex(
@@ -312,16 +191,7 @@ pub async fn new_email_verification(
 
     match result {
         Ok(_) => (),
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Redis(RedisMessages::ErrorSettingKey).to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            ))
-        }
+        Err(_) => return Err(internal_server_error("cache.error", None)),
     };
 
     let greetings_title = format!("Welcome to Test App {}", customer_name);
@@ -340,18 +210,8 @@ pub async fn new_email_verification(
 
     match send_verification_email(send_email_data).await {
         Ok(_) => (),
-        Err(_) => {
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(GenericResponse {
-                    message: APIMessages::Email(EmailMessages::ErrorSendingVerificationEmail)
-                        .to_string(),
-                    data: json!({}),
-                    exit_code: 1,
-                }),
-            ))
-        }
+        Err(_) => return Err(internal_server_error("email.error", None)),
     };
 
-    Ok(())
+    return Ok(());
 }

@@ -11,7 +11,7 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 use regex::Regex;
 use rust_bert::{pipelines::sentence_embeddings::SentenceEmbeddingsModel, RustBertError};
-use serde_json::json;
+use serde_json::{json, Value};
 
 use super::api_messages::{APIMessages, CustomerMessages, EmailMessages, InputMessages};
 
@@ -28,7 +28,7 @@ pub fn payload_analyzer<T>(
                 exit_code: 1,
             });
 
-            return Err((StatusCode::INTERNAL_SERVER_ERROR, json));
+            return Err(bad_request("invalid.payload", None));
         }
     };
 
@@ -175,4 +175,130 @@ pub async fn detect_similar_sentences(model: &Arc<Box<Mutex<SentenceEmbeddingsMo
     }
 
     return Ok((true, similarity));
+}
+
+pub fn ok(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "ok",
+        _ => message,
+    };
+
+    (
+        StatusCode::OK,
+        Json(GenericResponse {
+            message: message.to_string(),
+            data,
+            exit_code: 0,
+        }),
+    )
+}
+
+pub fn internal_server_error(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "internal.server.error",
+        _ => message,
+    };
+
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(GenericResponse {
+            message: message.to_string(),
+            data,
+            exit_code: 1,
+        }),
+    )
+}
+
+pub fn bad_request(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "bad.request",
+        _ => message,
+    };
+
+    (
+        StatusCode::BAD_REQUEST,
+        Json(GenericResponse {
+            message: message.to_string(),
+            data,
+            exit_code: 1,
+        }),
+    )
+}
+
+pub fn not_found(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "not.found",
+        _ => message,
+    };
+    
+    (
+        StatusCode::NOT_FOUND,
+        Json(GenericResponse {
+            message: message.to_string(),
+            data: data,
+            exit_code: 1,
+        }),
+    )
+}
+
+pub fn unauthorized(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "unauthorized",
+        _ => message,
+    };
+    
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(GenericResponse {
+            message: "unauthorized".to_string(),
+            data,
+            exit_code: 1,
+        }),
+    )
+}
+
+pub fn forbidden(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
+    let data = match data {
+        Some(data) => data,
+        None => json!({}),
+    };
+
+    let message = match message {
+        "" => "forbidden",
+        _ => message,
+    };
+    
+    (
+        StatusCode::FORBIDDEN,
+        Json(GenericResponse {
+            message: "forbidden".to_string(),
+            data,
+            exit_code: 1,
+        }),
+    )
 }

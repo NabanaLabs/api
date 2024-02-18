@@ -81,12 +81,23 @@ pub async fn find_customer(db: &Database, filter: Document) -> Result<(bool, Opt
     }
 }
 
-pub async fn find_organization(db: &Database, filter: Document) -> Result<(bool, Option<Organization>), (StatusCode, Json<GenericResponse>)> {
+pub async fn find_organization(db: &Database, filter: Document) -> Result<Organization, (StatusCode, Json<GenericResponse>)> {
     let collection = get_organizations_collection(db).await;
     match collection.find_one(filter, None).await {
-        Ok(org) => match org {
-            Some(org) => Ok((true, Some(org))),
-            None => Ok((false, None)),
+        Ok(org) => {
+            match org {
+                Some(org) => return Ok(org),
+                None => {
+                    return Err((
+                        StatusCode::NOT_FOUND,
+                        Json(GenericResponse {
+                            message: String::from("organization not found"),
+                            data: json!({}),
+                            exit_code: 1,
+                        }),
+                    ));
+                },
+            }
         },
         Err(e) => {
             error!("error fetching organization: {}", e);
