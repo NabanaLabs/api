@@ -4,7 +4,7 @@ use crate::{
     storage::mongo::{build_organizations_filter, find_organization, get_organizations_collection, update_organization},
     types::{
         customer::{CustomerID, GenericResponse},
-        incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, RemoveModel},
+        incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, EditRouter, RemoveModel},
         llm_router::{self, Router},
         llms::LLMs,
         organization::{MemberRole, ModelObject, OrgMember, Organization},
@@ -398,6 +398,28 @@ pub async fn create_router_org(
     update_organization(&state.mongo_db, filter, update).await?;
 
     return Ok(ok("ok", Some(serde_json::to_value(router).unwrap())));
+}
+
+pub async fn edit_router_org(
+    headers: HeaderMap,
+    payload_result: Result<Json<EditRouter>, JsonRejection>,
+    state: Arc<AppState>,
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let access_data = extract_access_data(&headers, &state).await?;
+    let payload = payload_analyzer(payload_result)?;
+
+    let filter = build_organizations_filter(&access_data.org_id).await;
+    let org = find_organization(&state.mongo_db, filter).await?;
+
+    if !org.members.iter().any(|member| member.id == access_data.customer_id && (member.role == MemberRole::Owner || member.role == MemberRole::Member)) {
+        return Err(unauthorized("not.org.member", None));
+    }
+
+    if payload.id == "" {
+        return Err(bad_request("router.id.required", None));
+    }
+
+    return Ok(ok("ok", None));
 }
 
 // org access template

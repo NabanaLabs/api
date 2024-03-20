@@ -52,14 +52,14 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
     info!("API router loaded");
 
     let cors = CorsLayer::new()
-        .allow_credentials(false)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH])
+        .allow_credentials(true)
+        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH, Method::OPTIONS])
         .allow_origin(Any);
 
     let app = Router::new()
         .route("/service/health", get(|| async { "OK" }))
         .nest("/api", api)
-        .layer(cors)
+        .layer(CorsLayer::permissive())
         .layer(CompressionLayer::new())
         .layer(TimeoutLayer::new(Duration::from_secs(10)),)
         .fallback(fallback)
