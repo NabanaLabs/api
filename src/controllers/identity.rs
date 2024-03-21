@@ -118,11 +118,11 @@ pub async fn get_session(
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(id) => id,
-        Err(_) => return Err(unauthorized("", None)),
+        Err(_) => return Err(unauthorized("error1", None)),
     };
 
     if session_data.customer_id.is_empty() {
-        return Err(unauthorized("", None));
+        return Err(unauthorized("error2", None));
     }
 
     return Ok(ok("", Some(json!({

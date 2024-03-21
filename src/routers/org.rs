@@ -14,7 +14,7 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
     return Router::new()
         .route(
             // fetch org
-            "",
+            "/",
             get({
                 let app_state = Arc::clone(&app_state);
                 move |headers| get_org(headers, app_state) 
@@ -22,7 +22,7 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             // create org
-            "",
+            "/",
             post({
                 let app_state = Arc::clone(&app_state);
                 move |(headers, payload)| create_org(headers, payload, app_state)
@@ -30,7 +30,7 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             // delete org
-            "",
+            "/",
             delete({
                 let app_state = Arc::clone(&app_state);
                 move |headers| delete_org(headers, app_state)
@@ -38,7 +38,7 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
         )
         .route(
             // edit org
-            "",
+            "/",
             patch({
                 let app_state = Arc::clone(&app_state);
                 move |(headers, payload)| edit_org(headers, payload, app_state)

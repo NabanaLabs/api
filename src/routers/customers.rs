@@ -19,7 +19,7 @@ pub async fn get_customers_router(app_state: Arc<AppState>) -> Router<Arc<AppSta
     return Router::new()
         // fetch customer by id
         .route(
-            "",
+            "/",
             get({
                 let app_state = Arc::clone(&app_state);
                 move |(headers, query): (HeaderMap, Query<FetchCustomerByID>)| fetch_customer_record_by_id(headers, query, app_state)
@@ -27,7 +27,7 @@ pub async fn get_customers_router(app_state: Arc<AppState>) -> Router<Arc<AppSta
         )
         // create customer
         .route(
-            "",
+            "/",
             post({
                 let app_state = Arc::clone(&app_state);
                 move |payload| create_customer_record(payload, app_state)
