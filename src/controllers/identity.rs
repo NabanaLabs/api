@@ -81,6 +81,21 @@ impl FromStr for SessionScopes {
     }
 }
 
+fn get_all_scopes() -> Vec<String> {
+    vec![
+        SessionScopes::ViewPublicID.to_string(),
+        SessionScopes::ViewEmailAddresses.to_string(),
+        SessionScopes::ViewPublicProfile.to_string(),
+        SessionScopes::ViewPrivateSensitiveProfile.to_string(),
+        SessionScopes::ViewSubscription.to_string(),
+        SessionScopes::UpdateName.to_string(),
+        SessionScopes::UpdateEmailAddresses.to_string(),
+        SessionScopes::UpdatePreferences.to_string(),
+        SessionScopes::ManageOrganizations.to_string(),
+        SessionScopes::TotalAccess.to_string(),
+    ]
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SessionData {
     pub customer_id: String,
@@ -118,11 +133,11 @@ pub async fn get_session(
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = match get_user_session_from_req(&headers, &state.redis_connection).await {
         Ok(id) => id,
-        Err(_) => return Err(unauthorized("error1", None)),
+        Err(_) => return Err(unauthorized("", None)),
     };
 
     if session_data.customer_id.is_empty() {
-        return Err(unauthorized("error2", None));
+        return Err(unauthorized("", None));
     }
 
     return Ok(ok("", Some(json!({

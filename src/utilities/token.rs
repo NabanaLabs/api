@@ -11,7 +11,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use crate::controllers::identity::SessionScopes;
+use crate::controllers::identity::{get_all_scopes, SessionScopes};
 use crate::types::customer::GenericResponse;
 
 use super::api_messages::{APIMessages, TokenMessages};
@@ -77,7 +77,14 @@ pub fn create_token(id: &String, scopes: Vec<SessionScopes>) -> Result<std::stri
 }
 
 pub fn get_token_payload(token: &str) -> Result<TokenData<Claims>, (StatusCode, Json<GenericResponse>)> {
-    let validation = Validation::new(Algorithm::HS512);
+    let scopes = get_all_scopes();
+    let mut audience: Vec<&str> = Vec::new();
+    for scope in &scopes {
+        audience.push(scope);
+    }
+    
+    let mut validation = Validation::new(Algorithm::HS512);
+    validation.set_audience(&audience);
 
     let signing_key = match env::var("API_TOKENS_SIGNING_KEY") {
         Ok(key) => key,
