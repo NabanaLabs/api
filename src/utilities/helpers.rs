@@ -104,8 +104,8 @@ pub async fn parse_class(raw_class: &String) -> Result<CustomerType, (StatusCode
     let class: CustomerType;
     if raw_class.to_lowercase() == "personal" {
         class = CustomerType::PERSONAL;
-    } else if raw_class.to_lowercase() == "manager" {
-        class = CustomerType::MANAGER;
+    } else if raw_class.to_lowercase() == "business" {
+        class = CustomerType::BUSINESS;
     } else {
         return Err((
             StatusCode::BAD_REQUEST,

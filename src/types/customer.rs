@@ -21,62 +21,19 @@ pub struct Email {
     pub main: bool,
 }
 
+#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum CustomerType {
     PERSONAL,
-    MANAGER,
+    BUSINESS,
     DEVELOPER,
 }
 
-impl ToString for CustomerType {
-    fn to_string(&self) -> String {
-        match self {
-            CustomerType::PERSONAL => String::from("personal"),
-            CustomerType::MANAGER => String::from("manager"),
-            CustomerType::DEVELOPER => String::from("developer"),
-        }
-    }
-}
-
-impl FromStr for CustomerType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<CustomerType, Self::Err> {
-        match s {
-            "personal" => Ok(CustomerType::PERSONAL),
-            "manager" => Ok(CustomerType::MANAGER),
-            "developer" => Ok(CustomerType::DEVELOPER),
-            _ => Ok(CustomerType::PERSONAL),
-        }
-    }
-}
-
+#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum AuthProviders {
     GOOGLE,
     LEGACY,
-}
-
-impl ToString for AuthProviders {
-    fn to_string(&self) -> String {
-        match self {
-            AuthProviders::GOOGLE => String::from("GOOGLE"),
-            AuthProviders::LEGACY => String::from("LEGACY"),
-        }
-    }
-}
-
-
-impl FromStr for AuthProviders {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<AuthProviders, Self::Err> {
-        match s {
-            "google" => Ok(AuthProviders::GOOGLE),
-            "legacy" => Ok(AuthProviders::LEGACY),
-            _ => Ok(AuthProviders::LEGACY),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

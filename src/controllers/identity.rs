@@ -81,7 +81,7 @@ impl FromStr for SessionScopes {
     }
 }
 
-fn get_all_scopes() -> Vec<String> {
+pub fn get_all_scopes() -> Vec<String> {
     vec![
         SessionScopes::ViewPublicID.to_string(),
         SessionScopes::ViewEmailAddresses.to_string(),
