@@ -21,30 +21,12 @@ pub struct ModelObject {
     pub registered_by: CustomerID,
 }
 
+#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum MemberRole {
     Owner,
     Member,
     Viewer,
-}
-
-impl MemberRole {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "owner" => Some(Self::Owner),
-            "member" => Some(Self::Member),
-            "viewer" => Some(Self::Viewer),
-            _ => None,
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Owner => String::from("owner"),
-            Self::Member => String::from("member"),
-            Self::Viewer => String::from("viewer"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +35,7 @@ pub struct OrgMember {
     pub role: MemberRole,
 }
 
+#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AccessTokenScopes {
     Admin,
@@ -61,31 +44,6 @@ pub enum AccessTokenScopes {
     ManageMembers,
     AccessPromptModelSuggestion,
     AccessCachingService
-}
-
-impl AccessTokenScopes {
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s.to_lowercase().as_str() {
-            "admin" => Some(Self::Admin),
-            "manage.models" => Some(Self::ManageModels),
-            "manage.routers" => Some(Self::ManageRouters),
-            "manage.members" => Some(Self::ManageMembers),
-            "access.prompt.model.suggestion" => Some(Self::AccessPromptModelSuggestion),
-            "access.caching.service" => Some(Self::AccessCachingService),
-            _ => None,
-        }
-    }
-
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Admin => String::from("admin"),
-            Self::ManageModels => String::from("manage.models"),
-            Self::ManageRouters => String::from("manage.routers"),
-            Self::ManageMembers => String::from("manage.members"),
-            Self::AccessPromptModelSuggestion => String::from("access.prompt.model.suggestion"),
-            Self::AccessCachingService => String::from("access.caching.service"),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
