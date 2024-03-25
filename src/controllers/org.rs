@@ -35,7 +35,7 @@ pub async fn extract_access_data(
     state: &Arc<AppState>,
 ) -> Result<AccessData, (StatusCode, Json<GenericResponse>)> {
     let session_data = get_user_session_from_req(&headers, &state.redis_connection).await?;
-    if !(session_data.scopes.contains(&SessionScopes::TotalAccess) && session_data.scopes.contains(&SessionScopes::ManageOrganizations))
+    if !(session_data.scopes.contains(&SessionScopes::TotalAccess) || session_data.scopes.contains(&SessionScopes::ManageOrganizations))
     {
         return Err(unauthorized("not.enough.scopes", None));
     }
