@@ -14,11 +14,11 @@ COPY . .
 RUN apt-get update && apt-get install -y pkg-config libssl-dev libpq-dev wget unzip g++
 
 # Download the file using wget
-RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.1.0%2Bcpu.zip
+RUN wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.2.0%2Bcpu.zip
 # Extract the contents of the ZIP file to /usr/libtorch
-RUN unzip libtorch-shared-with-deps-2.1.0+cpu.zip -d /usr/
+RUN unzip libtorch-shared-with-deps-2.2.0+cpu.zip -d /usr/
 # Clean up unnecessary files
-RUN rm libtorch-shared-with-deps-2.1.0+cpu.zip
+RUN rm libtorch-shared-with-deps-2.2.0+cpu.zip
 
 ENV LIBTORCH=/usr/libtorch
 ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH

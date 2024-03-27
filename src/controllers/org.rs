@@ -15,6 +15,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use log::debug;
 use mongodb::bson::{doc, Bson};
 
 use super::identity::{get_user_session_from_req,  SessionScopes};
@@ -80,11 +81,6 @@ pub async fn create_org(
     state: Arc<AppState>,
 ) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
     let session_data = get_user_session_from_req(&headers, &state.redis_connection).await?;
-    if !(session_data.scopes.contains(&SessionScopes::TotalAccess) && session_data.scopes.contains(&SessionScopes::ManageOrganizations))
-    {
-        return Err(unauthorized("not.enough.scopes", None));
-    }
-
     let payload = payload_analyzer(payload_result)?;
     if payload.name.len() < 3 || payload.name.len() > 30 {
         return Err(bad_request("org.name.length.invalid", None));

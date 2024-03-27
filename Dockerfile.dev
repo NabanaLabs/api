@@ -30,8 +30,9 @@ RUN rm libtorch.zip
 # Set the environment variables
 ENV LIBTORCH=/usr/lib/libtorch
 ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH
+ENV RUSTBERT_CACHE=/usr/src/app/.cache/.rustbert/
 
-RUN rm -rf /root/.cache/.rustbert/
+# RUN rm -rf /root/.cache/.rustbert/
 
 # Build the Rust application
 RUN cargo build
