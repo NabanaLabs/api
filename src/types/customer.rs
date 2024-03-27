@@ -1,7 +1,6 @@
 use crate::types::subscription::Subscription;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::str::FromStr;
 
 use super::organization::OrganizationID;
 
@@ -21,16 +20,16 @@ pub struct Email {
     pub main: bool,
 }
 
-#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum CustomerType {
     PERSONAL,
     BUSINESS,
     DEVELOPER,
 }
 
-#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
 pub enum AuthProviders {
     GOOGLE,
     LEGACY,

@@ -275,6 +275,7 @@ pub fn unauthorized(message: &str, data: Option<Value>) -> (StatusCode, Json<Gen
     )
 }
 
+#[allow(dead_code)]
 pub fn forbidden(message: &str, data: Option<Value>) -> (StatusCode, Json<GenericResponse>) {
     let data = match data {
         Some(data) => data,

@@ -8,7 +8,7 @@ pub mod openai_models;
 pub mod anthropic_models;
 pub mod coherence_models;
 pub mod llms;
-pub mod llm_router;
+pub mod router;
 
 pub mod state;
 pub mod organization;

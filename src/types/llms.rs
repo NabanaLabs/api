@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{anthropic_models::AnthropicModels, coherence_models::CoherenceModels, openai_models::OpenAIModels};
 
-#[derive(Default, Debug, Serialize)]
+#[derive(Clone, Default, Debug, Serialize)]
 pub struct ModelInfo {
     pub company: Option<String>,
     pub model: String,

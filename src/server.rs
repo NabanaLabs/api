@@ -4,7 +4,6 @@ use crate::{
     }, types::{lemonsqueezy::Products, state::{AppState, EmailProviderSettings, GoogleAuth, MasterEmailEntity}}, utilities::helpers::fallback
 };
 use axum::{
-    http::Method,
     routing::get,
     Router,
 };
@@ -19,7 +18,7 @@ use std::{env, sync::{Arc, Mutex}, time::Duration};
 use tower_http::timeout::TimeoutLayer;
 use tower_http::{
     compression::CompressionLayer,
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
 };
 
 use log::info;
@@ -50,11 +49,6 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
         .nest("/core", core);
 
     info!("API router loaded");
-
-    let cors = CorsLayer::new()
-        .allow_credentials(true)
-        .allow_methods([Method::GET, Method::POST, Method::DELETE, Method::PATCH, Method::OPTIONS])
-        .allow_origin(Any);
 
     let app = Router::new()
         .route("/service/health", get(|| async { "OK" }))

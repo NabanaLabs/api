@@ -3,7 +3,7 @@ use axum::BoxError;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
 use axum::{Router, routing::post};
-use crate::controllers::org::{create_model_org, create_org, create_router_org, delete_model_org, delete_org, edit_model_org, edit_org, get_models, get_org, get_routers};
+use crate::controllers::org::{create_model_org, create_org, create_router_org, delete_model_org, delete_org, edit_model_org, edit_org, edit_router_org, get_models, get_org, get_routers};
 use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
@@ -85,13 +85,19 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             }),
         )
         .route(
-            // fetch routers
+            // create routers
             "/routers",
             post({
                 let app_state = Arc::clone(&app_state);
                 move |(headers, payload)| create_router_org(headers, payload, app_state)
             }),
         )
+        .route(
+            "/routers", 
+            patch({
+            let app_state = Arc::clone(&app_state);
+            move |(headers, payload)| edit_router_org(headers, payload, app_state)
+        }))
         .layer(
             ServiceBuilder::new()
                 .layer(HandleErrorLayer::new(|err: BoxError| async move {

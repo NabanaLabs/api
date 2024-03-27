@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::llm_router::{Category, Sentence};
+use super::router::{Category, Sentence};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignIn {

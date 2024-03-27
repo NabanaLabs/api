@@ -1,10 +1,13 @@
+use mongodb::bson::Bson;
 use serde::{Deserialize, Serialize};
 
-use super::{customer::CustomerID, llm_router::Router};
+use super::{customer::CustomerID, router::Router};
 
 pub type OrganizationID = String;
 
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ModelOwner {
     OpenAI,
     Anthropic,
@@ -12,17 +15,32 @@ pub enum ModelOwner {
     OpenSource,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelType {
+    Legacy,
+    Custom,
+}
+
+impl From<ModelType> for Bson {
+    fn from(model_type: ModelType) -> Self {
+        match model_type {
+            ModelType::Legacy => Bson::String("legacy".to_string()),
+            ModelType::Custom => Bson::String("custom".to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelObject {
     pub id: String,
+    pub r#type: ModelType,
     pub display_name: String,
-    pub description: String,
-    pub company: Option<String>,
     pub registered_by: CustomerID,
 }
 
-#[serde(rename_all = "lowercase")]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
 pub enum MemberRole {
     Owner,
     Member,
@@ -35,8 +53,8 @@ pub struct OrgMember {
     pub role: MemberRole,
 }
 
-#[serde(rename_all = "lowercase")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum AccessTokenScopes {
     Admin,
     ManageModels,

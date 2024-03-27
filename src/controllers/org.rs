@@ -3,12 +3,7 @@ use std::sync::Arc;
 use crate::{
     storage::mongo::{build_organizations_filter, find_organization, get_organizations_collection, update_organization},
     types::{
-        customer::{CustomerID, GenericResponse},
-        incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, EditRouter, RemoveModel},
-        llm_router::{self, Router},
-        llms::LLMs,
-        organization::{MemberRole, ModelObject, OrgMember, Organization},
-        state::AppState,
+        customer::{CustomerID, GenericResponse}, incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, EditRouter, RemoveModel}, llms::{LLMs, ModelInfo}, organization::{MemberRole, ModelObject, ModelType, OrgMember, Organization}, router::{self, Router}, state::AppState
     },
     utilities::helpers::{
         bad_request, internal_server_error, ok, payload_analyzer, random_string, unauthorized
@@ -211,34 +206,53 @@ pub async fn create_model_org(
     }
 
     let all_models_list = LLMs::all_models_info();
-    let model = match all_models_list.iter().find(|model| model.model.clone() == payload.id) {
-        Some(model) => model,
-        None => return Err(bad_request("model.not.found", None)),
+    let mut model_type = ModelType::Legacy;
+    let mut model_info = ModelInfo {
+        model: "".to_string(),
+        company: None,
+        context_window: 0,
+        training_data: "",
     };
 
+    match all_models_list.iter().find(|model| model.model.clone() == payload.id) {
+        Some(model) => {
+            model_info = model.clone();
+        },
+        None => {
+            model_type = ModelType::Custom;
+        },
+    }
     if payload.display_name.len() < 1 || payload.display_name.len() > 32 {
         return Err(bad_request("model.display_name.length.invalid", None));
     }
-    
-    if payload.description.len() < 1 || payload.description.len() > 128 {
-        return Err(bad_request("model.description.length.invalid", None));
-    }
 
-    let model_object = ModelObject {
-        id: model.model.clone(),
-        display_name: payload.display_name.clone(),
-        description: payload.description.clone(),
-        company: model.company.clone(),
-        registered_by: access_data.customer_id,
-    };
+    let model_object: ModelObject;
+    if model_type == ModelType::Legacy {
+        model_object = ModelObject {
+            id: model_info.model.clone(),
+            r#type: model_type,
+            display_name: model_info.model.clone(),
+            registered_by: access_data.customer_id.clone(),
+        };
+    } else {
+        model_object = ModelObject {
+            id: payload.id.clone(),
+            r#type: model_type,
+            display_name: payload.display_name.clone(),
+            registered_by: access_data.customer_id.clone(),
+        };
+    }
 
     let model_object_bson = doc! {
         "id": model_object.id.clone(),
+        "type": model_object.r#type.clone(),
         "display_name": model_object.display_name.clone(),
-        "description": model_object.description.clone(),
-        "company": model_object.company.clone(),
         "registered_by": model_object.registered_by.clone(),
     };
+
+    if org.models.iter().any(|model| model.id == model_object.id) {
+        return Err(bad_request("model.already.exist", None));
+    }
 
     let update = doc! {"$push": {
             "models": model_object_bson,
@@ -270,14 +284,12 @@ pub async fn delete_model_org(
         return Err(unauthorized("not.org.member", None));
     }
 
-    let all_models_list = LLMs::all_models_info();
-    let model = match all_models_list.iter().find(|model| model.model.clone() == payload.id) {
-        Some(model) => model,
-        None => return Err(bad_request("model.not.found", None)),
-    };
+    if !org.models.iter().any(|model| model.id == payload.id) {
+        return Err(bad_request("model.not.found", None));
+    }
 
     let update = doc! {"$pull": {
-            "models": doc!{"id": model.model.clone()},
+            "models": doc!{"id": payload.id.clone()},
         }
     };
 
@@ -306,21 +318,18 @@ pub async fn edit_model_org(
         return Err(unauthorized("not.org.member", None));
     }
 
-    let all_models_list = LLMs::all_models_info();
-    let model = match all_models_list.iter().find(|model| model.model == payload.id) {
-        Some(model) => model,
-        None => return Err(bad_request("model.not.found", None)),
-    };
+    if !org.models.iter().any(|model| model.id == payload.id) {
+        return Err(bad_request("model.not.found", None));
+    }
 
     let filter = doc! { 
         "id": org.id, 
-        "models.id": model.model.clone()
+        "models.id": payload.id.clone(),
     };
 
     let update = doc! {
         "$set": { 
             "models.$.display_name": &payload.display_name,
-            "models.$.description": &payload.description,
         }
     };
 
@@ -390,7 +399,7 @@ pub async fn create_router_org(
     };
 
     let update = doc! {"$push": {
-            "routers": <llm_router::Router as Into<Bson>>::into(router.clone()),
+            "routers": <router::Router as Into<Bson>>::into(router.clone()),
         }
     };
 

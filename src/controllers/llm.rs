@@ -5,7 +5,7 @@ use crate::{
     types::{
         customer::GenericResponse,
         incoming_requests::ProcessPrompt,
-        llm_router::Category,
+        router::Category,
         llms::LLMs,
         organization::{AccessTokenScopes, ModelObject},
         state::AppState,
@@ -102,14 +102,14 @@ pub async fn process_prompt(
         return Err(unauthorized("unauthorized.access.token", None));
     }
 
-    let required_scope: Vec<String> = vec![
-        AccessTokenScopes::AccessPromptModelSuggestion.to_string(),
-        AccessTokenScopes::Admin.to_string(),
+    let required_scope = vec![
+        AccessTokenScopes::AccessPromptModelSuggestion,
+        AccessTokenScopes::Admin,
     ];
 
     if !org.access_tokens.iter().any(|access_token| {
         access_token.token == org_access_token && 
-        access_token.scopes.iter().any(|scope| required_scope.contains(&scope.to_string()))
+        access_token.scopes.iter().any(|scope| required_scope.contains(scope))
     }) {
         return Err(unauthorized("unauthorized.access.token.scopes", None));
     }

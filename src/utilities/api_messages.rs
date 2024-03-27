@@ -26,6 +26,7 @@ pub enum APIMessages{
     LLMRouter(LLMRouterMessages),
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum LLMRouterMessages {
     PromptProcessed,
@@ -38,6 +39,7 @@ pub enum LLMRouterMessages {
 }
 
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum TokenMessages {
     Missing,
@@ -61,6 +63,7 @@ pub enum TokenMessages {
     ErrorParsingToken,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum InputMessages {
     InvalidNameLength,
@@ -71,6 +74,7 @@ pub enum InputMessages {
     NewPasswordConfirmationMustMatch,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum CustomerMessages {
     Created,
@@ -94,11 +98,13 @@ pub enum CustomerMessages {
     NotFoundByID,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum MongoMessages {
     ErrorInserting,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum RedisMessages {
     FailedToConnect,
@@ -107,6 +113,7 @@ pub enum RedisMessages {
     ErrorSettingKey,
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum EmailMessages {
     Verified,

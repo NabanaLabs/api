@@ -22,6 +22,7 @@ use redis::{Client, Commands, RedisError};
 use serde_json::json;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
 pub enum SessionScopes {
     ViewPublicID,
     ViewEmailAddresses,

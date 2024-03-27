@@ -7,7 +7,6 @@ use crate::{
 
 use axum::{extract::rejection::JsonRejection, http::HeaderMap, http::StatusCode, Json};
 
-use hex;
 use hmac::{Hmac, Mac};
 use serde::Serialize;
 use sha2::Sha256;
