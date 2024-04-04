@@ -3,7 +3,7 @@ use axum::BoxError;
 use axum::error_handling::HandleErrorLayer;
 use axum::http::StatusCode;
 use axum::{Router, routing::post};
-use crate::controllers::org::{create_model_org, create_org, create_router_org, delete_model_org, delete_org, edit_model_org, edit_org, edit_router_org, get_models, get_org, get_routers};
+use crate::controllers::org::{create_model_org, create_org, create_router_org, delete_model_org, delete_org, edit_model_org, edit_org, edit_router_org, edit_router_prompt_classification_org, edit_router_sentence_matching_org, edit_router_single_model_org, get_models, get_org, get_routers};
 use crate::types::state::AppState;
 use std::{sync::Arc, time::Duration};
 
@@ -93,10 +93,32 @@ pub async fn get_org_router(app_state: Arc<AppState>) -> Router<Arc<AppState>> {
             }),
         )
         .route(
+            // edit routers
             "/routers", 
             patch({
             let app_state = Arc::clone(&app_state);
             move |(headers, payload)| edit_router_org(headers, payload, app_state)
+        }))
+        .route(
+            // edit routers prompt classification model
+            "/routers/single.model", 
+            patch({
+            let app_state = Arc::clone(&app_state);
+            move |(headers, payload)| edit_router_single_model_org(headers, payload, app_state)
+        }))
+        .route(
+            // edit routers prompt classification model
+            "/routers/prompt.classification.model", 
+            patch({
+            let app_state = Arc::clone(&app_state);
+            move |(headers, payload)| edit_router_prompt_classification_org(headers, payload, app_state)
+        }))
+        .route(
+            // edit routers
+            "/routers/sentence.matching", 
+            patch({
+            let app_state = Arc::clone(&app_state);
+            move |(headers, payload)| edit_router_sentence_matching_org(headers, payload, app_state)
         }))
         .layer(
             ServiceBuilder::new()

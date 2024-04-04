@@ -42,7 +42,6 @@ primary_region = 'bog'
   PRO_ANNUALLY_VARIANT_ID = '202400'
   PRO_MONTHLY_VARIANT_ID = '202405'
   PRO_PRODUCT_ID = '160756'
-
 [http_service]
   internal_port = 8080
   force_https = true
@@ -52,18 +51,8 @@ primary_region = 'bog'
   processes = ['app']
   [http_service.http_options]
     h2_backend = true
-  [[services.http_checks]]
-    interval = 10000
-    grace_period = "5s"
-    method = "get"
-    path = "/service/health"
-    protocol = "http"
-    restart_limit = 0
-    timeout = 2000
-    tls_skip_verify = false
-    [services.http_checks.headers]
 
-[[vm]]
+[vm]
   cpu_kind = 'shared'
   cpus = 2
   memory_mb = 4096

@@ -82,7 +82,7 @@ pub async fn find_organization(db: &Database, filter: Document) -> Result<Organi
                     return Err((
                         StatusCode::NOT_FOUND,
                         Json(GenericResponse {
-                            message: String::from("organization not found"),
+                            message: String::from("org.not.found"),
                             data: json!({}),
                             exit_code: 1,
                         }),

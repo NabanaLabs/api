@@ -62,7 +62,6 @@ pub struct Router {
 
     // https://github.com/NabanaLabs/albert-prompt-classification
     pub use_prompt_calification_model: bool,
-    pub prompt_calification_model_version: String,
     pub prompt_calification_model_categories: Vec<Category>,
 
     // Example 
@@ -96,7 +95,6 @@ impl Into<Bson> for Router {
             "use_single_model": self.use_single_model,
             "model_id": self.model_id,
             "use_prompt_calification_model": self.use_prompt_calification_model,
-            "prompt_calification_model_version": self.prompt_calification_model_version,
             "prompt_calification_model_categories": self.prompt_calification_model_categories,
             "use_sentence_matching": self.use_sentence_matching,
             "sentences": self.sentences,

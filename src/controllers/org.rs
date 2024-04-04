@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     storage::mongo::{build_organizations_filter, find_organization, get_organizations_collection, update_organization},
     types::{
-        customer::{CustomerID, GenericResponse}, incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, EditRouter, RemoveModel}, llms::{LLMs, ModelInfo}, organization::{MemberRole, ModelObject, ModelType, OrgMember, Organization}, router::{self, Router}, state::AppState
+        customer::{CustomerID, GenericResponse}, incoming_requests::{CreateModel, CreateOrg, CreateRouter, EditModel, EditOrg, EditRouter, EditRouterPromptClassification, EditRouterSentenceMatching, EditRouterSingleModel, RemoveModel}, llms::{LLMs, ModelInfo}, organization::{MemberRole, ModelObject, ModelType, OrgMember, Organization}, router::{self, Router}, state::AppState
     },
     utilities::helpers::{
         bad_request, internal_server_error, ok, payload_analyzer, random_string, unauthorized
@@ -15,7 +15,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use log::debug;
+
 use mongodb::bson::{doc, Bson};
 
 use super::identity::{get_user_session_from_req,  SessionScopes};
@@ -231,6 +231,10 @@ pub async fn create_model_org(
             registered_by: access_data.customer_id.clone(),
         };
     } else {
+        if payload.display_name.len() < 1 || payload.display_name.len() > 32 {
+            return Err(bad_request("model.display_name.length.invalid", None));
+        }
+
         model_object = ModelObject {
             id: payload.id.clone(),
             r#type: model_type,
@@ -387,7 +391,6 @@ pub async fn create_router_org(
         model_id: "".to_string(),
 
         use_prompt_calification_model: false,
-        prompt_calification_model_version: "".to_string(),
         prompt_calification_model_categories: vec![],
 
         use_sentence_matching: false,
@@ -424,8 +427,198 @@ pub async fn edit_router_org(
         return Err(bad_request("router.id.required", None));
     }
 
+    if !org.routers.iter().any(|router| router.id == payload.id) {
+        return Err(bad_request("router.not.found", None));
+    }
+
+    if payload.name.len() < 1 || payload.name.len() > 32 {
+        return Err(bad_request("router.name.length.invalid", None));
+    }
+
+    if payload.description.len() < 1 || payload.description.len() > 128 {
+        return Err(bad_request("router.description.length.invalid", None));
+    }
+
+    let filter = doc! { 
+        "id": org.id, 
+        "routers.id": payload.id.clone(),
+    };
+
+    let update = doc! {
+        "$set": { 
+            "routers.$.name": &payload.name,
+            "routers.$.description": &payload.description,
+            "routers.$.active": payload.active,
+            "routers.$.deleted": payload.deleted,
+        }
+    };
+
+    update_organization(&state.mongo_db, filter, update).await?;
+
     return Ok(ok("ok", None));
 }
+
+pub async fn edit_router_single_model_org(
+    headers: HeaderMap,
+    payload_result: Result<Json<EditRouterSingleModel>, JsonRejection>,
+    state: Arc<AppState>,
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let access_data = extract_access_data(&headers, &state).await?;
+    let payload = payload_analyzer(payload_result)?;
+
+    let filter = build_organizations_filter(&access_data.org_id).await;
+    let org = find_organization(&state.mongo_db, filter).await?;
+
+    if !org.members.iter().any(|member| member.id == access_data.customer_id && (member.role == MemberRole::Owner || member.role == MemberRole::Member)) {
+        return Err(unauthorized("not.org.member", None));
+    }
+
+    if payload.id == "" {
+        return Err(bad_request("router.id.required", None));
+    }
+
+    if !org.routers.iter().any(|router| router.id == payload.id) {
+        return Err(bad_request("router.not.found", None));
+    }
+
+    let filter = doc! { 
+        "id": org.id, 
+        "routers.id": payload.id.clone(),
+    };
+
+    if payload.model_id.len() < 1 || payload.model_id.len() > 256 {
+        return Err(bad_request("model.id.length.invalid", None));
+    }
+
+    if !org.models.iter().any(|model| model.id == payload.model_id) {
+        return Err(bad_request("model.not.found", None));
+    }
+
+    let update = doc! {
+        "$set": { 
+            "routers.$.use_single_model": payload.use_single_model,
+            "routers.$.model_id": payload.model_id.clone(),
+        }
+    };
+
+    update_organization(&state.mongo_db, filter, update).await?;
+
+    return Ok(ok("ok", None));
+}
+
+pub async fn edit_router_prompt_classification_org(
+    headers: HeaderMap,
+    payload_result: Result<Json<EditRouterPromptClassification>, JsonRejection>,
+    state: Arc<AppState>,
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let access_data = extract_access_data(&headers, &state).await?;
+    let payload = payload_analyzer(payload_result)?;
+
+    let filter = build_organizations_filter(&access_data.org_id).await;
+    let org = find_organization(&state.mongo_db, filter).await?;
+
+    if !org.members.iter().any(|member| member.id == access_data.customer_id && (member.role == MemberRole::Owner || member.role == MemberRole::Member)) {
+        return Err(unauthorized("not.org.member", None));
+    }
+
+    if payload.id == "" {
+        return Err(bad_request("router.id.required", None));
+    }
+
+    if !org.routers.iter().any(|router| router.id == payload.id) {
+        return Err(bad_request("router.not.found", None));
+    }
+
+    let filter = doc! { 
+        "id": org.id, 
+        "routers.id": payload.id.clone(),
+    };
+
+    for category in payload.prompt_classification_categories.iter() {
+        if category.label.len() < 1 || category.label.len() > 32 {
+            return Err(bad_request("category.label.length.invalid", None));
+        }
+
+        if category.description.len() < 1 || category.description.len() > 128 {
+            return Err(bad_request("category.description.length.invalid", None));
+        }
+
+        if category.model_id.len() < 1 || category.model_id.len() > 256 {
+            return Err(bad_request("category.model_id.length.invalid", None));
+        }
+
+        if !org.models.iter().any(|model| model.id == category.model_id) {
+            return Err(bad_request("model.not.found", None));
+        }
+    }
+
+    let update = doc! {
+        "$set": { 
+            "routers.$.use_prompt_classification": payload.use_prompt_classification,
+            "routers.$.prompt_classification_categories": payload.prompt_classification_categories.clone(),
+        }
+    };
+
+    update_organization(&state.mongo_db, filter, update).await?;
+
+    return Ok(ok("ok", None));
+}
+
+
+pub async fn edit_router_sentence_matching_org(
+    headers: HeaderMap,
+    payload_result: Result<Json<EditRouterSentenceMatching>, JsonRejection>,
+    state: Arc<AppState>,
+) -> Result<(StatusCode, Json<GenericResponse>), (StatusCode, Json<GenericResponse>)> {
+    let access_data = extract_access_data(&headers, &state).await?;
+    let payload = payload_analyzer(payload_result)?;
+
+    let filter = build_organizations_filter(&access_data.org_id).await;
+    let org = find_organization(&state.mongo_db, filter).await?;
+
+    if !org.members.iter().any(|member| member.id == access_data.customer_id && (member.role == MemberRole::Owner || member.role == MemberRole::Member)) {
+        return Err(unauthorized("not.org.member", None));
+    }
+
+    if payload.id == "" {
+        return Err(bad_request("router.id.required", None));
+    }
+
+    if !org.routers.iter().any(|router| router.id == payload.id) {
+        return Err(bad_request("router.not.found", None));
+    }
+
+    let filter = doc! { 
+        "id": org.id, 
+        "routers.id": payload.id.clone(),
+    };
+
+    for sentence in payload.sentence_matching_sentences.iter() {
+        if sentence.text.len() < 1 || sentence.text.len() > 128 {
+            return Err(bad_request("sentence.text.length.invalid", None));
+        }
+
+        if sentence.model_id.len() < 1 || sentence.model_id.len() > 256 {
+            return Err(bad_request("sentence.model_id.length.invalid", None));
+        }
+
+        if !org.models.iter().any(|model| model.id == sentence.model_id) {
+            return Err(bad_request("model.not.found", None));
+        }
+    }
+
+    let update = doc! {
+        "$set": { 
+            "routers.$.use_sentence_matching": payload.use_sentence_matching,
+            "routers.$.sentences": payload.sentence_matching_sentences.clone(),
+        }
+    };
+
+    update_organization(&state.mongo_db, filter, update).await?;
+
+    return Ok(ok("ok", None));
+}
+
 
 // org access template
 #[allow(dead_code)]

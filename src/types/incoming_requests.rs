@@ -66,7 +66,6 @@ pub struct EditOrg {
 pub struct CreateModel {
     pub id: String,
     pub display_name: String,
-    pub description: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -97,23 +96,34 @@ pub struct DeleteRouter {
 #[derive(Debug, Deserialize)]
 pub struct EditRouter {
     pub id: String,
-    pub name: Option<String>,
-    pub description: Option<String>,
+    pub name: String,
+    pub description: String,
 
-    pub active: Option<bool>,
-    pub deleted: Option<bool>,
+    pub active: bool,
+    pub deleted: bool,
 
-    pub max_prompt_length: Option<i32>,
+    pub max_prompt_length: i32,
+}
 
-    pub use_single_model: Option<bool>,
-    pub model_id: Option<String>,
+#[derive(Debug, Deserialize)]
+pub struct EditRouterSingleModel {
+    pub id: String,
+    pub use_single_model: bool,
+    pub model_id: String,
+}
 
-    pub use_prompt_calification_model: Option<bool>,
-    pub prompt_calification_model_id: Option<String>,
-    pub prompt_calification_model_categories: Option<Vec<Category>>,
+#[derive(Debug, Deserialize)]
+pub struct EditRouterPromptClassification {
+    pub id: String,
+    pub use_prompt_classification: bool,
+    pub prompt_classification_categories: Vec<Category>,
+}
 
-    pub use_sentence_matching_model: Option<bool>,
-    pub sentences: Option<Vec<Sentence>>,
+#[derive(Debug, Deserialize)]
+pub struct EditRouterSentenceMatching {
+    pub id: String,
+    pub use_sentence_matching: bool,
+    pub sentence_matching_sentences: Vec<Sentence>,
 }
 
 #[derive(Debug, Deserialize)]
