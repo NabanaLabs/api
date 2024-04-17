@@ -29,6 +29,14 @@ RUN cargo build --release
 # Runtime Stage
 FROM fedora:34 AS runner
 
+RUN dnf install -y libssl-devel gcc-c++
+
+# Copy libtorch and set necessary environment variables
+COPY --from=builder /usr/libtorch /usr/libtorch
+ENV LIBTORCH=/usr/libtorch
+ENV LD_LIBRARY_PATH=${LIBTORCH}/lib:$LD_LIBRARY_PATH
+
+# Install necessary system dependency libpq
 RUN dnf install -y libpq
 
 EXPOSE 8080

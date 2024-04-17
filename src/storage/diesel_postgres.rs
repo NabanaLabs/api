@@ -1,5 +1,3 @@
-pub mod schemas;
-
 use r2d2 as original_r2d2;
 use diesel::{
     prelude::*,

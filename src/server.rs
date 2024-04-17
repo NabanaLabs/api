@@ -11,7 +11,7 @@ use diesel::{r2d2::ConnectionManager, PgConnection};
 use mongodb::Client as MongoClient;
 use r2d2::Pool;
 use redis::Client as RedisClient;
-use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType}, zero_shot_classification::{ZeroShotClassificationConfig, ZeroShotClassificationModel}}, resources::RemoteResource, RustBertError};
+use rust_bert::{pipelines::{common::{ModelResource, ModelType}, sentence_embeddings::{SentenceEmbeddingsBuilder, SentenceEmbeddingsModelType}, zero_shot_classification::{self, ZeroShotClassificationConfig, ZeroShotClassificationModel}}, resources::RemoteResource, RustBertError};
 use tokio::task;
 use std::{env, sync::{Arc, Mutex}, time::Duration};
 
@@ -77,6 +77,11 @@ pub async fn init(mongodb_client: MongoClient, redis_connection: RedisClient, po
 }
 
 pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisClient, postgres_conn: Option<Pool<ConnectionManager<PgConnection>>>) -> Arc<AppState> {
+    let production = match env::var("PRODUCTION") {
+        Ok(val) => val.parse::<bool>().unwrap_or(false),
+        Err(_) => false,
+    };
+
     let api_url = match env::var("API_URL") {
         Ok(url) => url,
         Err(_) => panic!("api_url not found"),
@@ -188,36 +193,45 @@ pub async fn set_app_state(mongodb_client: MongoClient, redis_connection: RedisC
         Err(_) => panic!("PROMPT_CLASSIFICATION_MODEL_URL not found"),
     };
 
-    let zero_shot_prompt_classification_model = match zero_shot_create_prompt_classify_model(&prompt_classification_model_name, &prompt_classification_model_url).await {
-        Ok(model) => model,
-        Err(e) => panic!("Error creating prompt classification model: {}", e),
-    };
+    if !production {
+        info!("Running in development mode, skipping loading of models");
+    }
 
-    let zero_shot_safe_prompt_classification_model = Arc::new(Box::new(Mutex::new(zero_shot_prompt_classification_model)));
+    let mut zero_shot_prompt_classification_model = None;
+    if production {
+        zero_shot_prompt_classification_model = match zero_shot_create_prompt_classify_model(&prompt_classification_model_name, &prompt_classification_model_url).await {
+            Ok(model) => Some(Arc::new(Box::new(Mutex::new(model)))),
+            Err(e) => panic!("Error creating prompt classification model: {}", e),
+        };
+    }
 
-    let embedding_model_result = match task::spawn_blocking(move || {
-        SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model()
-    }).await.map_err(|e| RustBertError::TchError(e.to_string())) {
-        Ok(model) => model,
-        Err(e) => panic!("Error creating sentence embedding model: {}", e),
-    };
+    let mut embedding_model = None;
+    
+    if production {
+        let embedding_model_result = match task::spawn_blocking(move || {
+            SentenceEmbeddingsBuilder::remote(SentenceEmbeddingsModelType::AllMiniLmL12V2).create_model()
+        }).await.map_err(|e| RustBertError::TchError(e.to_string())) {
+            Ok(model) => model,
+            Err(e) => panic!("Error creating sentence embedding model: {}", e),
+        };
 
-    let embedding_model = match embedding_model_result {
-        Ok(model) => model,
-        Err(e) => panic!("Error creating sentence embedding model: {}", e),
-    };
-
-    let safe_embedding_model = Arc::new(Box::new(Mutex::new(embedding_model)));
+        embedding_model = match embedding_model_result {
+            Ok(model) => Some(Arc::new(Box::new(Mutex::new(model)))),
+            Err(e) => panic!("Error creating sentence embedding model: {}", e),
+        };
+    }
 
     let llm_resources = crate::types::state::LLMResources {
         prompt_classification_model: crate::types::state::PromptClassificationModel {
-            model: zero_shot_safe_prompt_classification_model,
+            model: zero_shot_prompt_classification_model,
             name: prompt_classification_model_name,
             url: prompt_classification_model_url,
         },
-        embedding_model: safe_embedding_model,
+        embedding_model,
     };
+
     let app_state = Arc::new(AppState {
+        production,
         mongodb_client,
         redis_connection,
         postgres_conn,

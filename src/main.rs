@@ -73,6 +73,12 @@ async fn main() {
 
 async fn load_env() -> String {
     dotenv::dotenv().ok();
+
+    match env::var("PRODUCTION").expect("PRODUCTION must be set").parse::<bool>() {
+        Ok(val) => val,
+        Err(_) => panic!("PRODUCTION must be a boolean"),
+    };
+    
     env::var("HOST").expect("ADDRESS must be set");
     let port = env::var("PORT").expect("PORT must be set");
     match port.parse::<u16>() {

@@ -1,4 +1,4 @@
-use std::sync::{Arc, MutexGuard};
+use std::sync::Arc;
 
 use crate::{
     storage::mongo::{build_organizations_filter, find_organization},
@@ -20,7 +20,6 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use rust_bert::pipelines::zero_shot_classification::ZeroShotClassificationModel;
 use serde::{Deserialize, Serialize};
 
 use super::org::extract_access_data;
@@ -155,12 +154,18 @@ pub async fn process_prompt(
     }
 
     if router.use_prompt_calification_model {
-        let model: MutexGuard<'_, ZeroShotClassificationModel> = state
-            .llm_resources
-            .prompt_classification_model
-            .model
-            .lock()
-            .unwrap();
+        let model = match &state.llm_resources.prompt_classification_model.model {
+            Some(model) => match model.lock() {
+                Ok(model) => model,
+                Err(_) => {
+                    return Err(bad_request("prompt.calification.error", None));
+                }
+            },
+            None => {
+                return Err(bad_request("prompt.calification.error", None));
+            }
+        };
+
         let input = [payload.prompt.as_deref().unwrap_or_default()];
 
         let router_categories: &[Category] = &router.prompt_calification_model_categories;
@@ -259,9 +264,15 @@ pub async fn process_prompt(
 
                 return Ok(ok("ok", Some(serde_json::to_value(data).unwrap())));
             } else if sentence.use_cosine_similarity {
-                // embedding model
+                let emb_model = match &state.llm_resources.embedding_model {
+                    Some(model) => model,
+                    None => {
+                        return Err(bad_request("sentence.matching.error", None));
+                    }
+                };
+
                 let (similar, score) = match detect_similar_sentences(
-                    &state.llm_resources.embedding_model,
+                    emb_model,
                     sentence.text.clone(),
                     prompt.to_string(),
                     sentence.cosine_similarity_temperature,

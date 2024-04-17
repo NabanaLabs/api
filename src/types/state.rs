@@ -29,7 +29,7 @@ pub struct GoogleAuth {
 
 #[derive(Clone)]
 pub struct PromptClassificationModel {
-    pub model: Arc<Box<Mutex<ZeroShotClassificationModel>>>,
+    pub model: Option<Arc<Box<Mutex<ZeroShotClassificationModel>>>>,
     pub name: String,
     pub url: String,
 }
@@ -37,11 +37,13 @@ pub struct PromptClassificationModel {
 #[derive(Clone)]
 pub struct LLMResources {
     pub prompt_classification_model: PromptClassificationModel,
-    pub embedding_model: Arc<Box<Mutex<SentenceEmbeddingsModel>>>,
+    pub embedding_model: Option<Arc<Box<Mutex<SentenceEmbeddingsModel>>>>,
 }
 
 #[derive(Clone)]
 pub struct AppState {
+    pub production: bool,
+
     pub api_url: String,
     pub api_tokens_expiration_time: i64,
 
